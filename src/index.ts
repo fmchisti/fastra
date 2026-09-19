@@ -1,5 +1,5 @@
 import { buildApp } from "./app.ts";
-import { env } from "./config/env.ts";
+import { EnvError, env, exitWithEnvError } from "./config/env.ts";
 import { logger } from "./config/logger.ts";
 import { createShutdownHandler } from "./lib/shutdown.ts";
 
@@ -23,6 +23,8 @@ const main = async (): Promise<void> => {
 };
 
 main().catch((err: unknown) => {
+  // Provider env (database, auth, storage) is validated while the app is built
+  if (err instanceof EnvError) exitWithEnvError(err);
   logger.fatal({ err }, "Failed to start server");
   process.exit(1);
 });

@@ -1,6 +1,19 @@
 import "dotenv/config";
 import { z } from "zod";
 
+/** Invalid or missing environment variables. The message lists every problem. */
+export class EnvError extends Error {
+  override name = "EnvError";
+}
+
+/** Print an `EnvError` without a stack trace and exit: the message is all a developer needs. */
+export const exitWithEnvError = (error: EnvError): never => {
+  process.stderr.write(
+    `\n${error.message}\n\nCompare your .env with .env.example (create it with: pnpm env:init).\n\n`,
+  );
+  process.exit(1);
+};
+
 /**
  * Validate environment variables against a Zod schema.
  * Core config uses it below; each provider (auth, storage, ...) calls it with
@@ -13,7 +26,7 @@ export const loadEnv = <TSchema extends z.ZodType>(
 ): z.output<TSchema> => {
   const result = schema.safeParse(source);
   if (!result.success) {
-    throw new Error(`Invalid ${label}:\n${z.prettifyError(result.error)}`);
+    throw new EnvError(`Invalid ${label}:\n${z.prettifyError(result.error)}`);
   }
   return result.data;
 };
@@ -88,4 +101,14 @@ export type Env = z.infer<typeof coreEnvSchema>;
 /** Validate core env. Exported so tests can build variants without touching process.env. */
 export const parseEnv = (source: NodeJS.ProcessEnv): Env => loadEnv(coreEnvSchema, source);
 
-export const env: Env = parseEnv(process.env);
+const loadProcessEnv = (): Env => {
+  try {
+    return parseEnv(process.env);
+  } catch (error) {
+    // Thrown while modules load, before any handler in index.ts exists
+    if (error instanceof EnvError) return exitWithEnvError(error);
+    throw error;
+  }
+};
+
+export const env: Env = loadProcessEnv();

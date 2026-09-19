@@ -124,7 +124,7 @@ Projects do not receive later Fastra changes automatically. To pick up a fix, cr
 ## Getting started
 
 ```bash
-cp .env.example .env
+pnpm env:init   # creates .env from .env.example and generates secrets; never overwrites
 ```
 <!-- @setup-if orm!=none|redis!=none -->
 
@@ -171,11 +171,13 @@ pnpm dev
 
 | Command | Description |
 |---|---|
-| `pnpm dev` | Run with hot reload |
+| `pnpm dev` / `pnpm dev:debug` | Run with hot reload / also open the Node inspector on port 9229 |
 | `pnpm build` / `pnpm start` | Compile to `dist/` / run it |
 | `pnpm type-check` | TypeScript check (src + tests) |
 | `pnpm check` / `pnpm check:fix` | Lint + format check (Biome) / apply fixes |
-| `pnpm test` | Unit, integration, and type tests |
+| `pnpm test` / `pnpm test:watch` | Unit, integration, and type tests |
+| `pnpm verify` | `check:fix`, `type-check`, and `test`: run before every commit |
+| `pnpm env:init` | Create `.env` from `.env.example` with generated secrets |
 
 <!-- @setup-if orm!=none|redis!=none|storage=s3 -->
 Local services: `pnpm db:up` / `pnpm db:down` (Docker).
@@ -205,6 +207,12 @@ Template only (removed by setup):
 - `pnpm setup:choices`: rewrite `setup/choices.json` (the questions `pnpm create fastra` asks) after changing `setup/features.ts`
 - `pnpm build:create`: build the `create-fastra` package (see [docs/template.md](./docs/template.md))
 <!-- @setup-endif -->
+
+## Editor
+
+`.vscode/` is shared: recommended extensions (Biome, Vitest), format and organize imports on save, and debug configurations: **Debug server**, **Debug current test file**, and **Attach to pnpm dev:debug**. Other editors read `.editorconfig`.
+
+Invalid or missing environment variables stop startup with a list of the problems, not a stack trace.
 
 ## Project structure
 
@@ -243,14 +251,14 @@ Selected providers:
 Good prompts reference it, for example:
 
 <!-- @setup-if orm!=none -->
-- "Add a `products` module with name, price, and stock. Follow AGENTS.md, use `pnpm gen:module`, and make `pnpm type-check && pnpm test` pass."
+- "Add a `products` module with name, price, and stock. Follow AGENTS.md, use `pnpm gen:module`, and make `pnpm verify` pass."
 <!-- @setup-endif -->
 <!-- @setup-if orm=none -->
-- "Add a `GET /api/weather/:city` route that calls the OpenWeather API through a typed client. Follow AGENTS.md and make `pnpm type-check && pnpm test` pass."
+- "Add a `GET /api/weather/:city` route that calls the OpenWeather API through a typed client. Follow AGENTS.md and make `pnpm verify` pass."
 <!-- @setup-endif -->
 - "Add a stricter rate limit to one expensive route and a test for it."
 
-Every change should end with `pnpm check:fix && pnpm type-check && pnpm test`.
+Every change should end with `pnpm verify`.
 
 ## Production
 

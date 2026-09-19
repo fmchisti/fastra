@@ -105,10 +105,7 @@ export const features = {
           { key: "BETTER_AUTH_URL", example: "http://localhost:3000", comment: "Public URL of this API" },
           { key: "BETTER_AUTH_SECRET", example: "", comment: "openssl rand -base64 32" },
         ],
-        nextSteps: [
-          "Set BETTER_AUTH_SECRET (openssl rand -base64 32)",
-          "Auth endpoints live under /api/auth (e.g. POST /api/auth/sign-up/email)",
-        ],
+        nextSteps: ["Auth endpoints live under /api/auth (e.g. POST /api/auth/sign-up/email)"],
       },
       supabase: {
         label: "Supabase Auth",
@@ -345,8 +342,9 @@ export const CONDITIONAL: ConditionalManifest[] = [
       "src/db",
       "test/fakes/database.ts",
       "test/postgres.ts",
-      "scripts",
-      "test/scripts",
+      "scripts/gen-module.ts",
+      "scripts/gen",
+      "test/scripts/gen-module.test.ts",
       "src/lib/crud.ts",
       "test/repositories/crud-contract.ts",
     ],

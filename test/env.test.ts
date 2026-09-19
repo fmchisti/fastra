@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { parseEnv } from "../src/config/env.ts";
+import { describe, expect, it, vi } from "vitest";
+import { EnvError, exitWithEnvError, parseEnv } from "../src/config/env.ts";
 import { loadDatabaseEnv } from "../src/db/env.ts"; // @setup-if orm!=none
 
 const validEnv = {};
@@ -56,6 +56,28 @@ describe("parseEnv", () => {
     expect(parseEnv({ ...validEnv, NODE_ENV: "development" }).DOCS_ENABLED).toBe(true);
     expect(parseEnv({ ...validEnv, NODE_ENV: "production" }).DOCS_ENABLED).toBe(false);
     expect(parseEnv({ ...validEnv, NODE_ENV: "production", DOCS_ENABLED: "true" }).DOCS_ENABLED).toBe(true);
+  });
+});
+
+describe("exitWithEnvError", () => {
+  it("prints the problems without a stack trace and exits 1", () => {
+    const exit = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    let error: unknown;
+    try {
+      parseEnv({ PORT: "abc" });
+    } catch (caught) {
+      error = caught;
+    }
+    if (!(error instanceof EnvError)) throw new Error("expected an EnvError");
+
+    exitWithEnvError(error);
+
+    expect(exit).toHaveBeenCalledWith(1);
+    const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join("");
+    expect(output).toContain("PORT must be a number");
+    expect(output).toContain("pnpm env:init");
+    expect(output).not.toMatch(/\n\s+at /);
   });
 });
 

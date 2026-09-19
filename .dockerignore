@@ -6,6 +6,7 @@ src/generated
 .git
 .github
 .cursor
+.vscode
 .claude
 .env
 .env.*
