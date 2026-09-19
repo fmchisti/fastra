@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { parse } from "dotenv";
 import { describe, expect, it, vi } from "vitest";
 import { EnvError, exitWithEnvError, parseEnv } from "../src/config/env.ts";
 import { loadDatabaseEnv } from "../src/db/env.ts"; // @setup-if orm!=none
@@ -19,6 +21,20 @@ describe("parseEnv", () => {
 
   it("does not require database, auth, or storage variables", () => {
     expect(() => parseEnv(validEnv)).not.toThrow();
+  });
+
+  it("treats empty values, as written in .env.example, as unset", () => {
+    const env = parseEnv({ ...validEnv, PORT: "", DOCS_ENABLED: "", DOCS_USERNAME: "", DOCS_PASSWORD: "" });
+
+    expect(env.PORT).toBe(3000);
+    expect(env.DOCS_ENABLED).toBe(true);
+    expect(env.DOCS_USERNAME).toBeUndefined();
+  });
+
+  it("accepts .env.example as it is, so a fresh .env starts the server", async () => {
+    const example = parse(await readFile(new URL("../.env.example", import.meta.url)));
+
+    expect(() => parseEnv(example)).not.toThrow();
   });
 
   it("lists every invalid variable in the error", () => {

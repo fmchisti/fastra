@@ -24,7 +24,9 @@ export const loadEnv = <TSchema extends z.ZodType>(
   source: NodeJS.ProcessEnv = process.env,
   label = "environment variables",
 ): z.output<TSchema> => {
-  const result = schema.safeParse(source);
+  // `KEY=` in .env (how .env.example lists optional variables) means unset, not an empty string
+  const defined = Object.fromEntries(Object.entries(source).filter(([, value]) => value !== ""));
+  const result = schema.safeParse(defined);
   if (!result.success) {
     throw new EnvError(`Invalid ${label}:\n${z.prettifyError(result.error)}`);
   }

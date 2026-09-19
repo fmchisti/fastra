@@ -179,6 +179,7 @@ pnpm verify
 ### Env and config
 - Core variables: `src/config/env.ts`. Provider or module variables: validate where used with `loadEnv(schema)`, so only what the project uses is required.
 - Add every new variable to `.env.example` with a comment. `pnpm env:init` creates `.env` from it and generates a value for empty variables commented `# openssl rand -base64 32`.
+- Empty values (`KEY=`) count as unset, so `.env.example` can list optional variables.
 - Invalid env throws `EnvError`; startup prints the message without a stack trace and exits 1.
 <!-- @setup-template-only -->
 - In the template, also add it to `CORE_ENV` or the option's `env` in `setup/features.ts`, because setup regenerates `.env.example`.
