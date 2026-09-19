@@ -1,5 +1,8 @@
-import "dotenv/config";
+import { existsSync } from "node:fs";
 import { z } from "zod";
+
+// Load .env when present (development). Variables that are already set win.
+if (existsSync(".env")) process.loadEnvFile();
 
 /** Invalid or missing environment variables. The message lists every problem. */
 export class EnvError extends Error {

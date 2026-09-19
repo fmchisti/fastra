@@ -1,5 +1,8 @@
-import "dotenv/config";
+import { existsSync } from "node:fs";
 import { defineConfig } from "drizzle-kit";
+
+// Load .env when present (development). Variables that are already set win.
+if (existsSync(".env")) process.loadEnvFile();
 
 const databaseUrl = process.env.DATABASE_URL;
 

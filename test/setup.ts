@@ -1,5 +1,5 @@
 // Runs before every test file, before any app module is imported.
-// Values set here win over `.env` because dotenv never overrides existing vars.
+// Values set here win over `.env` because loading `.env` never overrides existing vars.
 // Providers are replaced with fakes (see test/fakes), so no real credentials are needed.
 Object.assign(process.env, {
   NODE_ENV: "test",
