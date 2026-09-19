@@ -12,4 +12,4 @@ Follow [AGENTS.md](../../AGENTS.md): workflow, definition of done, layout, modul
 - New feature calling another API: typed `client.ts` injected through `container.ts` (see AGENTS.md).
 <!-- @setup-endif -->
 - Provider details: [docs/providers.md](../../docs/providers.md).
-- Verify every change: `pnpm check:fix && pnpm type-check && pnpm test`.
+- Verify every change: `pnpm verify` (`pnpm check:fix && pnpm type-check && pnpm test`).

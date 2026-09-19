@@ -24,7 +24,7 @@ Auth, database (ORM), storage, and Redis sit behind interfaces, and each can be 
 4. **Write or update tests with the change.** A bug fix starts with a failing test.
 5. **Verify:**
    ```bash
-   pnpm check:fix && pnpm type-check && pnpm test
+   pnpm verify   # pnpm check:fix && pnpm type-check && pnpm test
    ```
    All three must pass. Tests need no database, network, Docker, or credentials.
 6. **Update docs** when behaviour, env vars, scripts, or conventions change: this file, `README.md`, `docs/providers.md`, and `.env.example`.
@@ -61,6 +61,7 @@ src/
 test/
   helpers.ts           useTestApp, buildTestApp, testEnv, createTestDependencies
   fakes/               In-memory implementations of dependencies
+scripts/init-env.ts    pnpm env:init: .env from .env.example with generated secrets
 docs/providers.md      Provider details and how to add one
 ```
 
@@ -106,7 +107,7 @@ Each feature lives in `src/modules/<feature>/`. Copy the closest existing module
 ```bash
 pnpm gen:module product --fields "name:string price:float stock:int description:text? releasedAt:datetime?"
 pnpm db:migrate
-pnpm check:fix && pnpm type-check && pnpm test
+pnpm verify
 ```
 
 - Field types: `string` (≤255), `text`, `int`, `float`, `boolean`, `datetime`. `?` = nullable. `id`, `createdAt`, `updatedAt` are added.
@@ -177,7 +178,9 @@ pnpm check:fix && pnpm type-check && pnpm test
 
 ### Env and config
 - Core variables: `src/config/env.ts`. Provider or module variables: validate where used with `loadEnv(schema)`, so only what the project uses is required.
-- Add every new variable to `.env.example` with a comment.
+- Add every new variable to `.env.example` with a comment. `pnpm env:init` creates `.env` from it and generates a value for empty variables commented `# openssl rand -base64 32`.
+- Empty values (`KEY=`) count as unset, so `.env.example` can list optional variables.
+- Invalid env throws `EnvError`; startup prints the message without a stack trace and exits 1.
 <!-- @setup-template-only -->
 - In the template, also add it to `CORE_ENV` or the option's `env` in `setup/features.ts`, because setup regenerates `.env.example`.
 <!-- @setup-endif -->

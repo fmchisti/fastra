@@ -3,7 +3,7 @@ import fastifyHelmet from "@fastify/helmet";
 import fastifyRateLimit from "@fastify/rate-limit";
 import fastifySwagger from "@fastify/swagger";
 import fastifySwaggerUi from "@fastify/swagger-ui";
-import Fastify from "fastify";
+import Fastify, { LogController } from "fastify";
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { APP_NAME, APP_VERSION } from "./config/app-info.ts";
@@ -42,7 +42,7 @@ export const buildApp = async (
     logger: loggerOptions,
     trustProxy: env.TRUST_PROXY,
     genReqId: generateRequestId,
-    requestIdLogLabel: "requestId",
+    logController: new LogController({ requestIdLogLabel: "requestId" }),
   }).withTypeProvider<ZodTypeProvider>();
   const deps = createDependencies(overrides, { corsOrigins: corsOrigins(env) });
 

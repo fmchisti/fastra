@@ -289,7 +289,7 @@ const main = async () => {
 Registered in src/app.ts, src/container.ts, src/config/swagger.ts, test/helpers.ts.
 Migration created. Next:
   pnpm db:migrate
-  pnpm type-check && pnpm test
+  pnpm verify
 Routes: /api/${names.plural.kebab}`);
   }
 };

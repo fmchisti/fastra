@@ -6,6 +6,7 @@
   "scripts": {
     "deploy": "railway up",
     "dev": "tsx watch src/index.ts",
+    "dev:debug": "tsx watch --inspect src/index.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "type-check": "tsc --noEmit",
@@ -15,6 +16,7 @@
     "db:studio": "drizzle-kit studio",
     "test": "vitest run",
     "test:watch": "vitest",
+    "verify": "pnpm check:fix && pnpm type-check && pnpm test",
     "setup:verify": "tsx setup/verify.ts",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
@@ -26,6 +28,7 @@
     "check": "biome check .",
     "check:fix": "biome check --write .",
     "gen:module": "tsx scripts/gen-module.ts",
+    "env:init": "tsx scripts/init-env.ts",
     "build:create": "tsc -p packages/create-fastra/tsconfig.json",
     "setup:choices": "tsx setup/choices.ts"
   },

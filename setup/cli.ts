@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import * as p from "@clack/prompts";
+import { initEnv } from "../scripts/init-env.ts";
 import { createExampleModule, formatProject, type Runner, regenerateDatabaseArtifacts } from "./database.ts";
 import {
   allowedOptions,
@@ -189,9 +189,9 @@ const main = async () => {
   p.log.step("Type-checking");
   run("pnpm", ["type-check"], cwd);
 
-  const envExists = (await readdir(cwd)).includes(".env");
+  if (await initEnv(cwd)) p.log.step("Created .env from .env.example (secrets generated)");
   const steps = [
-    ...(envExists ? [] : ["cp .env.example .env   # then fill in the values"]),
+    "Review .env            # provider keys and URLs",
     ...(chosen.orm !== "none" || chosen.redis !== "none"
       ? ["pnpm db:up             # local services in Docker (or point the URLs elsewhere)"]
       : []),

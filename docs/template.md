@@ -15,6 +15,7 @@ This file is for changes to Fastra, the template itself. `pnpm setup:project` de
 4. **Rewrites `package.json`**: removes dependencies and scripts owned only by unselected options, sets the selected options' scripts, and removes the setup tool.
 5. **Generates `.env.example`** from `CORE_ENV` plus the selected options' `env`.
 6. Runs `pnpm install`, regenerates the initial migration for the selected schema, creates the public `notes` example when there is a database but no auth, formats with Biome, and type-checks.
+7. Creates `.env` from the new `.env.example` with generated secrets (`scripts/init-env.ts`), unless one exists.
 
 ## Directives
 
@@ -105,7 +106,7 @@ For a new CLI release, bump `version` in `packages/create-fastra/package.json`, 
 
 ## Checklist for template changes
 
-- [ ] `pnpm check && pnpm type-check && pnpm test`
+- [ ] `pnpm verify`
 - [ ] `pnpm setup:verify` passes for every combination
 - [ ] New env vars in `CORE_ENV` or the option's `env`
 - [ ] New dependencies with install scripts in `allowBuilds` (manifest and `pnpm-workspace.yaml`)
