@@ -203,6 +203,7 @@ pnpm verify
 <!-- @setup-endif -->
 - Commit migrations. Never edit a migration that has been applied anywhere; add a new one.
 - Production applies migrations with `pnpm db:migrate:deploy`.
+- Development data goes in `scripts/seed.ts` (`pnpm db:seed`), created through repositories. `pnpm db:reset` deletes the local Docker volumes and migrates again.
 <!-- @setup-endif -->
 
 ### Lifecycle
@@ -247,6 +248,7 @@ pnpm verify
 ## Git
 
 - Conventional Commits: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`. Imperative subject, ≤72 characters; the body explains why.
+- `pnpm hooks:install` enables the pre-commit hook in `.githooks/` (Biome on staged files). It is opt-in per clone and refuses to run inside a monorepo.
 - One logical change per commit. Never commit `.env`, secrets, `dist/`, or `src/generated/`.
 - PR description: summary, breaking changes, and a test plan listing what was actually run.
 

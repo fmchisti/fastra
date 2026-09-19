@@ -175,9 +175,10 @@ pnpm dev
 | `pnpm build` / `pnpm start` | Compile to `dist/` / run it |
 | `pnpm type-check` | TypeScript check (src + tests) |
 | `pnpm check` / `pnpm check:fix` | Lint + format check (Biome) / apply fixes |
-| `pnpm test` / `pnpm test:watch` | Unit, integration, and type tests |
+| `pnpm test` / `pnpm test:watch` / `pnpm test:coverage` | Unit, integration, and type tests / watch mode / coverage report in `coverage/` |
 | `pnpm verify` | `check:fix`, `type-check`, and `test`: run before every commit |
 | `pnpm env:init` | Create `.env` from `.env.example` with generated secrets |
+| `pnpm hooks:install` | Optional pre-commit hook: Biome on staged files (`.githooks/`) |
 
 <!-- @setup-if orm!=none|redis!=none|storage=s3 -->
 Local services: `pnpm db:up` / `pnpm db:down` (Docker).
@@ -188,6 +189,8 @@ Database:
 - `pnpm gen:module <name> --fields "..."`: scaffold a CRUD module with table, migration, and tests
 - `pnpm db:migrate:deploy`: apply migrations in production (after `pnpm build`)
 - `pnpm db:studio`: browse the database
+- `pnpm db:seed`: development data from `scripts/seed.ts`
+- `pnpm db:reset`: **deletes all local Docker data** (Postgres, Redis, MinIO volumes), starts the services again, and applies migrations
 <!-- @setup-endif -->
 
 <!-- @setup-if orm!=none -->
