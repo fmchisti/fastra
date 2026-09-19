@@ -31,6 +31,13 @@ Self-hosted. Users, sessions, accounts, and verification tokens live in your Pos
 - Env: `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET` (`openssl rand -base64 32`)
 - Endpoints under `/api/auth`, e.g. `POST /api/auth/sign-up/email`, `POST /api/auth/sign-in/email`, `POST /api/auth/sign-out`. Full list: Better Auth docs.
 - Browsers use the session cookie. API/mobile clients use `Authorization: Bearer <token>` with the token from the `set-auth-token` response header (bearer plugin).
+- Try it (with `pnpm dev` running):
+  ```bash
+  curl -si localhost:3000/api/auth/sign-up/email -H 'content-type: application/json' \
+    -d '{"name":"Dev","email":"dev@example.com","password":"dev-password-123"}' | grep -i set-auth-token
+  curl -s localhost:3000/api/todos -H "authorization: Bearer <token from the header above>"
+  ```
+  The same token works in Swagger UI (`/api/docs` → **Authorize**).
 - Social login, email verification, 2FA, organizations: add to `buildAuth()` in `src/auth/providers/better-auth/index.ts`. Plugins that add tables need the schema updated (`npx @better-auth/cli generate`) in both the ORM schema and a new migration.
 <!-- @setup-endif -->
 

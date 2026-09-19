@@ -1,0 +1,4 @@
+#!/bin/sh
+# Enabled by `pnpm hooks:install`. Lints and format-checks staged files only, so it stays fast.
+# Skip once with `git commit --no-verify`.
+exec pnpm exec biome check --staged --no-errors-on-unmatched

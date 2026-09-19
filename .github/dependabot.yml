@@ -1,0 +1,29 @@
+# Weekly dependency updates, grouped so CI runs once per group instead of once per package.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Released together; mixed versions do not work
+      prisma:
+        patterns: ["prisma", "@prisma/*"]
+      aws-sdk:
+        patterns: ["@aws-sdk/*", "@smithy/*"]
+      fastify:
+        patterns: ["fastify", "@fastify/*", "fastify-*"]
+      dev-tools:
+        dependency-type: development
+        update-types: [minor, patch]
+      production:
+        dependency-type: production
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

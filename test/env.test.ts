@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { parse } from "dotenv";
+import { parseEnv as parseDotenv } from "node:util";
 import { describe, expect, it, vi } from "vitest";
 import { EnvError, exitWithEnvError, parseEnv } from "../src/config/env.ts";
 import { loadDatabaseEnv } from "../src/db/env.ts"; // @setup-if orm!=none
@@ -32,7 +32,7 @@ describe("parseEnv", () => {
   });
 
   it("accepts .env.example as it is, so a fresh .env starts the server", async () => {
-    const example = parse(await readFile(new URL("../.env.example", import.meta.url)));
+    const example = parseDotenv(await readFile(new URL("../.env.example", import.meta.url), "utf8"));
 
     expect(() => parseEnv(example)).not.toThrow();
   });
