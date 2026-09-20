@@ -23,9 +23,7 @@ export interface AppDependencies {
   // @setup-if auth!=none&orm!=none
   todos: TodoRepository;
   // @setup-endif
-  // @setup-if orm!=none
   // @gen:dependencies (pnpm gen:module inserts repositories above)
-  // @setup-endif
   // @setup-if storage=s3,local
   storage: StorageProvider;
   // @setup-endif
@@ -68,9 +66,7 @@ export const createDependencies = (
     // @setup-if auth!=none&orm!=none
     todos: overrides.todos ?? createTodoRepository(getDatabase()),
     // @setup-endif
-    // @setup-if orm!=none
     // @gen:factories
-    // @setup-endif
     // @setup-if storage=s3,local
     storage: overrides.storage ?? createStorage(),
     // @setup-endif

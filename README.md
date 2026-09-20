@@ -159,7 +159,7 @@ pnpm dev
 - Example CRUD: `/api/notes` (public). Create your own with `pnpm gen:module product --fields "name:string price:decimal status:enum(draft,published)=draft"`
 <!-- @setup-endif -->
 <!-- @setup-if orm=none -->
-- Add routes in `src/modules/<name>/` (see [AGENTS.md](./AGENTS.md)). Call external APIs from a service with `fetch`.
+- Add a module that calls another API with `pnpm gen:client weather` (typed client, route, fake, tests), then see [AGENTS.md](./AGENTS.md).
 <!-- @setup-endif -->
 <!-- @setup-if storage=s3,local -->
 - File uploads: `/api/files`
@@ -174,6 +174,7 @@ pnpm dev
 | `pnpm type-check` | TypeScript check (src + tests) |
 | `pnpm check` / `pnpm check:fix` | Lint + format check (Biome) / apply fixes |
 | `pnpm test` / `pnpm test:watch` / `pnpm test:coverage` | Unit, integration, and type tests / watch mode / coverage report in `coverage/` |
+| `pnpm gen:client <name>` | Scaffold a module that calls an external API: typed client, route, fake client, tests |
 | `pnpm routes` | List every route with its auth requirement and summary (no database needed) |
 | `pnpm verify` | `check:fix`, `type-check`, and `test`: run before every commit |
 | `pnpm env:init` | Create `.env` from `.env.example` with generated secrets |

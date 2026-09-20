@@ -87,3 +87,24 @@ export const insertAfterMatch = (content: string, anchor: RegExp, text: string, 
   const end = match.index + match[0].length;
   return `${content.slice(0, end)}${text}${content.slice(end)}`;
 };
+
+/** Insert `text` on its own line right before the line containing `marker`, matching its indentation. */
+export const insertBeforeMarker = (content: string, marker: string, text: string, file: string): string => {
+  const lines = content.split("\n");
+  const index = lines.findIndex((line) => line.includes(marker));
+  if (index === -1) throw new Error(`${file}: marker "${marker}" not found`);
+  const indent = /^\s*/.exec(lines[index] ?? "")?.[0] ?? "";
+  lines.splice(index, 0, `${indent}${text}`);
+  return lines.join("\n");
+};
+
+/** Insert an import after the last top-level import (Biome sorts it afterwards). */
+export const addImport = (content: string, statement: string): string => {
+  const lines = content.split("\n");
+  let last = -1;
+  lines.forEach((line, index) => {
+    if (/^import\s/.test(line) || /^\s*}\s*from\s+["']/.test(line)) last = index;
+  });
+  lines.splice(last + 1, 0, statement);
+  return lines.join("\n");
+};

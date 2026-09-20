@@ -354,7 +354,9 @@ export const CONDITIONAL: ConditionalManifest[] = [
       "scripts/gen-module.ts",
       "scripts/gen-field.ts",
       "scripts/gen-remove.ts",
-      "scripts/gen",
+      // scripts/gen/model.ts, edit.ts, and client-templates.ts stay: gen:client needs no database
+      "scripts/gen/templates.ts",
+      "scripts/gen/prompt.ts",
       "scripts/seed.ts",
       "docs/modules.md",
       "test/scripts/gen-module.test.ts",

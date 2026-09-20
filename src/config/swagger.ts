@@ -33,9 +33,7 @@ export const createSwaggerOptions = (env: Env): FastifyDynamicSwaggerOptions => 
       // @setup-if auth!=none&orm!=none
       { name: "Todos", description: "Example CRUD module" },
       // @setup-endif
-      // @setup-if orm!=none
       // @gen:tags
-      // @setup-endif
       // @setup-if storage=s3,local
       { name: "Files", description: "File uploads" },
       // @setup-endif

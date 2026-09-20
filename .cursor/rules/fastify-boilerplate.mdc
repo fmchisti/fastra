@@ -8,8 +8,6 @@ Follow [AGENTS.md](../../AGENTS.md): workflow, definition of done, layout, modul
 <!-- @setup-if orm!=none -->
 - New CRUD resource: `pnpm gen:module <name> --fields "..."`, then customize. More fields later: `pnpm gen:field <module> --fields "..."`. Keep `// @gen:` markers.
 <!-- @setup-endif -->
-<!-- @setup-if orm=none -->
-- New feature calling another API: typed `client.ts` injected through `container.ts` (see AGENTS.md).
-<!-- @setup-endif -->
+- New feature calling another API: `pnpm gen:client <name>`, then replace the example call (see AGENTS.md). Keep `// @gen:` markers.
 - Provider details: [docs/providers.md](../../docs/providers.md).
 - Verify every change: `pnpm verify` (`pnpm check:fix && pnpm type-check && pnpm test`).

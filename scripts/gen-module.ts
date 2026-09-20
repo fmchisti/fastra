@@ -4,6 +4,7 @@ import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseArgs, promisify } from "node:util";
+import { addImport, insertBeforeMarker } from "./gen/edit.ts";
 import { FIELD_SYNTAX, type Field, type ModuleNames, parseFields, parseModuleName } from "./gen/model.ts";
 import { canPrompt, intro, note, promptConfirm, promptFields, promptModuleName } from "./gen/prompt.ts";
 import * as t from "./gen/templates.ts";
@@ -37,26 +38,7 @@ export const detectOrm = async (root: string): Promise<Orm> => {
   throw new Error("Could not detect the ORM from src/db/index.ts");
 };
 
-/** Insert `text` on its own line right before the line containing `marker`, matching its indentation. */
-export const insertBeforeMarker = (content: string, marker: string, text: string, file: string): string => {
-  const lines = content.split("\n");
-  const index = lines.findIndex((line) => line.includes(marker));
-  if (index === -1) throw new Error(`${file}: marker "${marker}" not found`);
-  const indent = /^\s*/.exec(lines[index] ?? "")?.[0] ?? "";
-  lines.splice(index, 0, `${indent}${text}`);
-  return lines.join("\n");
-};
-
-/** Insert an import after the last top-level import (Biome sorts it afterwards). */
-export const addImport = (content: string, statement: string): string => {
-  const lines = content.split("\n");
-  let last = -1;
-  lines.forEach((line, index) => {
-    if (/^import\s/.test(line) || /^\s*}\s*from\s+["']/.test(line)) last = index;
-  });
-  lines.splice(last + 1, 0, statement);
-  return lines.join("\n");
-};
+export { addImport, insertBeforeMarker };
 
 interface FileWrite {
   path: string;
