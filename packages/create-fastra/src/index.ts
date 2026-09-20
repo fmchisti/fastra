@@ -356,7 +356,10 @@ const main = async () => {
     const pkg = await readJson(path.join(target, "package.json"));
     const name = typeof pkg.name === "string" ? pkg.name : projectName;
     const fromRoot = usesTurbo ? `pnpm turbo run dev --filter=${name}` : `pnpm --filter ${name} dev`;
-    p.log.info(`From the monorepo root: ${fromRoot}. Docker: see "Monorepo" in the README.`);
+    const appDir = path.relative(workspaceRoot, target).split(path.sep).join("/");
+    p.log.info(
+      `From the monorepo root: ${fromRoot}. Docker image: docker build -f ${appDir}/Dockerfile -t ${name} .`,
+    );
   }
   p.outro(`Done. Next: cd ${relative}, then follow the steps above.`);
 };

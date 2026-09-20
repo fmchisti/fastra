@@ -79,14 +79,15 @@ After changing `setup/features.ts`, run `pnpm setup:choices` to rewrite `setup/c
 2. After confirmation, deletes the project's `pnpm-lock.yaml`, `pnpm-workspace.yaml`, and `packageManager`, and adds the whole template's `allowBuilds` to the root. The first install still contains every provider, and pnpm 11 fails on unapproved install scripts (it also writes placeholder entries into the root file).
 3. Passes `--force` to setup: inside a repository, the new folder always counts as an uncommitted change.
 4. After setup, removes the root `allowBuilds` entries it added that the chosen options do not need.
-5. With a root `turbo.json`, writes a package `turbo.json` (`outputs: ["dist/**"]`) and a `check-types` script.
+5. Setup itself (not the CLI, so it also works after a manual download) detects the enclosing workspace and replaces `Dockerfile` with `Dockerfile.monorepo`: it builds from the workspace root (`docker build -f apps/api/Dockerfile .`), installs with `--filter "./apps/api..."`, and copies a standalone production build made by `pnpm deploy --prod --legacy`. `.dockerignore` becomes `Dockerfile.dockerignore` with `**/` patterns, which Docker uses for that build context. The image has no pnpm: migrations run with `node dist/db/drizzle/migrate.js` or `node_modules/.bin/prisma migrate deploy`. Standalone projects just lose `Dockerfile.monorepo`.
+6. With a root `turbo.json`, writes a package `turbo.json` (`outputs: ["dist/**"]`) and a `check-types` script.
 
 Inside any existing git repository (monorepo or not) it skips `git init` and deletes the project's `.github/`.
 
 - Code: `src/cli.ts` (argument parsing, target checks, template fetching), `src/monorepo.ts` (workspace detection and root file edits), and `src/index.ts` (the interactive flow). Tests: `packages/create-fastra/test/`, run by the root `pnpm test`.
 - `--template` accepts a giget source (`gh:fmchisti/fastra#v1.0.0`) or a local folder, which CI uses to test the current commit.
 - CI job `create-fastra` builds and packs the package like `npm publish`, creates a project from the checkout with `pnpm dlx`, and checks it (name, no setup files, clean git tree, check/type-check/test).
-- CI job `monorepo` does the same inside a fresh Turborepo on pnpm 10.28 and pnpm 11. It checks the root files, then runs `turbo run build lint check-types test` and a cached rebuild. It installs without the template's lockfile, so newer dependency versions are tested too.
+- CI job `monorepo` does the same inside a fresh Turborepo on pnpm 10.28 and pnpm 11. It checks the root files, runs `turbo run build lint check-types test` and a cached rebuild, then builds the Docker image from the monorepo root, runs migrations in it, waits for readiness, and checks that `docker stop` exits 0. It installs without the template's lockfile, so newer dependency versions are tested too.
 - CI job `latest-dependencies` type-checks and tests the template with the newest versions its ranges allow, which is what a monorepo installs.
 
 ### Publishing

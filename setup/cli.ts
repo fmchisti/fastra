@@ -8,6 +8,7 @@ import {
   allowedOptions,
   applySelection,
   describeSelection,
+  findWorkspaceAppDir,
   nextStepsFor,
   toProjectName,
   validateProjectName,
@@ -168,7 +169,17 @@ const main = async () => {
 
   const spinner = p.spinner();
   spinner.start("Removing unselected providers");
-  const result = await applySelection(cwd, chosen, { removeSetup: !values["keep-setup"], projectName });
+  const workspaceAppDir = findWorkspaceAppDir(cwd);
+  const result = await applySelection(cwd, chosen, {
+    removeSetup: !values["keep-setup"],
+    projectName,
+    workspaceAppDir,
+  });
+  if (workspaceAppDir) {
+    p.log.step(
+      `pnpm workspace detected: the Dockerfile builds from its root (docker build -f ${workspaceAppDir}/Dockerfile .)`,
+    );
+  }
   spinner.stop(`Removed ${result.removed.length} paths, updated ${result.updatedFiles.length} files`);
 
   if (!values["skip-install"]) {

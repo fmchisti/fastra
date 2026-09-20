@@ -76,6 +76,17 @@ jobs:
   monorepo:
     name: pnpm create fastra in a Turborepo
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: app
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d app"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     strategy:
       fail-fast: false
       matrix:
@@ -140,6 +151,33 @@ jobs:
           pnpm turbo run build --filter=api | tee turbo-build.log
           grep -q "cache hit" turbo-build.log
           test -f apps/api/dist/index.js
+      - name: Build the Docker image from the workspace root
+        working-directory: ${{ runner.temp }}/mono
+        run: |
+          test -f apps/api/Dockerfile.dockerignore
+          for file in .dockerignore Dockerfile.monorepo; do test ! -e "apps/api/$file"; done
+          docker build -f apps/api/Dockerfile -t mono-api .
+      - name: Migrate, start, and stop the container
+        working-directory: ${{ runner.temp }}/mono
+        run: |
+          {
+            echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/app"
+            echo "BETTER_AUTH_URL=http://localhost:3000"
+            echo "BETTER_AUTH_SECRET=$(openssl rand -base64 32)"
+          } > ci.env
+          if [ "${{ matrix.orm }}" = prisma ]; then
+            docker run --rm --network host --env-file ci.env mono-api node_modules/.bin/prisma migrate deploy
+          else
+            docker run --rm --network host --env-file ci.env mono-api node dist/db/drizzle/migrate.js
+          fi
+          docker run -d --name mono-api --network host --env-file ci.env mono-api
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/api/health/ready; then break; fi
+            sleep 1
+          done
+          curl -fsS http://localhost:3000/api/health/ready
+          docker stop --timeout 20 mono-api
+          test "$(docker inspect mono-api --format '{{.State.ExitCode}}')" = "0" || { docker logs mono-api; exit 1; }
 
   latest-dependencies:
     name: Latest dependencies (no lockfile)
