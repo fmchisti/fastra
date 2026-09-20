@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -53,5 +54,7 @@ const isEntryPoint = process.argv[1] !== undefined && import.meta.url === pathTo
 if (isEntryPoint) {
   const file = path.resolve(import.meta.dirname, "..", CHOICES_FILE);
   await writeFile(file, `${JSON.stringify(buildChoices(), null, 2)}\n`);
+  // Biome lays out short arrays differently from JSON.stringify, and `pnpm check` compares formatting
+  execFileSync("pnpm", ["exec", "biome", "format", "--write", file], { stdio: "ignore" });
   console.log(`Wrote ${CHOICES_FILE}`);
 }
