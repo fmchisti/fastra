@@ -187,6 +187,8 @@ Local services: `pnpm db:up` / `pnpm db:down` (Docker).
 Database:
 - `pnpm gen:module <name> --fields "..."`: scaffold a CRUD module with table, migration, and tests
 - `pnpm gen:field <module> --fields "..."`: add fields to a generated module (schema, table, repository, test fake, migration)
+- `pnpm gen:remove <module>`: delete a generated module, its registrations, and create the drop-table migration
+- Run `pnpm gen:module` or `pnpm gen:field <module>` without `--fields` to be asked for everything
 - Both take `--migrate` to apply the migration right away. Recipes: [docs/modules.md](./docs/modules.md)
 - `pnpm db:sync`: after editing the schema by hand, create the migration and apply it (same command for Drizzle and Prisma)
 - `pnpm db:migrate:deploy`: apply migrations in production (after `pnpm build`)

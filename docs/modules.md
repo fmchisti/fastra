@@ -8,6 +8,7 @@ Recipes for the day after `pnpm gen:module`. Rules and file roles are in [AGENTS
 pnpm gen:module product --fields "name:string price:decimal stock:int=0 status:enum(draft,published)=draft sku:string?!index" --migrate
 ```
 
+- Or run `pnpm gen:module` alone: it asks for the name and each field, then prints the command it ran.
 - Field syntax: `name:type[?][!index][=default]`. Types: `string`, `text`, `int`, `float`, `decimal`, `boolean`, `datetime`, `uuid`, `enum(a,b)`. Run `pnpm gen:module --help` for details.
 - `--migrate` applies the migration (the database must be running: `pnpm db:up`). Without it, run `pnpm db:migrate`.
 - `--dry-run` lists the files. `--public` creates a resource without an owner. `--plural people` for irregular names.
@@ -20,6 +21,15 @@ pnpm gen:field product --fields "weight:float=0 color:string?" --migrate
 ```
 
 Updates the three Zod schemas, the table, the repository mapper, and the test fake, and creates the migration. It writes nothing when a file lost its insertion point and prints the manual steps instead. A required field needs a default if the table has rows.
+
+## Remove a module
+
+```bash
+pnpm gen:remove product --dry-run
+pnpm gen:remove product
+```
+
+Deletes the module, its tests and fake, its lines in `src/app.ts`, `src/container.ts`, `src/config/swagger.ts`, and `test/helpers.ts`, and creates a migration that **drops the table**. Useful for trying things out: generate, look, remove. If the module was already migrated somewhere you care about, read the migration before applying it.
 
 ## Change or remove a field
 
