@@ -1,11 +1,38 @@
-import type { Field, ModuleNames } from "./model.ts";
+import { type Field, hasListOptions, type ListOptions, type ModuleNames, NO_LIST_OPTIONS } from "./model.ts";
 
 export interface TemplateContext {
   names: ModuleNames;
   fields: Field[];
   /** User-owned records (needs auth). `false` generates a public resource. */
   owned: boolean;
+  /** Search, sort, and filters of the list route. Default: pagination only. */
+  list?: ListOptions;
 }
+
+const listOf = (context: TemplateContext): ListOptions => context.list ?? NO_LIST_OPTIONS;
+
+/** Query-string schema of a filter: values arrive as strings. */
+const filterZod = (field: Field): string => {
+  switch (field.type) {
+    case "int":
+      return "z.coerce.number<string>().int()";
+    case "boolean":
+      return 'z.enum(["true", "false"]).transform((value) => value === "true")';
+    case "uuid":
+      return "z.uuid()";
+    case "enum":
+      return `z.enum([${(field.values ?? []).map((value) => `"${value}"`).join(", ")}])`;
+    default:
+      return "z.string().min(1).max(255)";
+  }
+};
+
+/** Expression for a sortable value in the in-memory fake (decimals are strings, booleans have no `<`). */
+const fakeSortValue = (field: Field): string => {
+  if (field.type === "decimal" || field.type === "boolean") return `Number(row.${field.name})`;
+  if (field.type === "datetime") return `row.${field.name}.getTime()`;
+  return `row.${field.name}`;
+};
 
 // ---------------------------------------------------------------------------
 // Per-type building blocks
@@ -207,8 +234,37 @@ export const fieldLines = (f: Field, names: ModuleNames): FieldLines => {
 // src/modules/<plural>/
 // ---------------------------------------------------------------------------
 
-export const schemaTemplate = ({ names, fields }: TemplateContext) => {
+export const schemaTemplate = (context: TemplateContext) => {
+  const { names, fields } = context;
   const { pascal } = names.singular;
+  const list = listOf(context);
+  const P = names.plural.pascal;
+  const querySchema = hasListOptions(list)
+    ? `
+export const List${P}QuerySchema = PaginationQuerySchema.extend({
+${lines(
+  [
+    ...(list.search.length > 0
+      ? [
+          `// Case-insensitive match in: ${list.search.map((f) => f.name).join(", ")}`,
+          "search: z.string().trim().min(1).max(100).optional(),",
+        ]
+      : []),
+    ...(list.sort.length > 0
+      ? [
+          `sort: z.enum([${["createdAt", ...list.sort.map((f) => f.name)].map((name) => `"${name}"`).join(", ")}]).default("createdAt"),`,
+          'order: z.enum(["asc", "desc"]).default("desc"),',
+        ]
+      : []),
+    ...list.filter.map((f) => `${f.name}: ${filterZod(f)}.optional(),`),
+  ],
+  "  ",
+)}
+});
+
+export type List${P}Query = z.infer<typeof List${P}QuerySchema>;
+`
+    : "";
   const rendered = fields.map((f) => fieldLines(f, names));
   const response = rendered.map((f) => f.response);
   const create = rendered.map((f) => f.create);
@@ -246,9 +302,9 @@ export type Update${pascal}Input = z.infer<typeof Update${pascal}BodySchema>;
 export const ${pascal}ParamsSchema = z.object({ id: z.uuid() });
 
 const authErrors = { 401: ErrorResponseSchema };
-
+${querySchema}
 export const List${names.plural.pascal}Schema = {
-  querystring: PaginationQuerySchema,
+  querystring: ${hasListOptions(list) ? `List${P}QuerySchema` : "PaginationQuerySchema"},
   response: { 200: paginatedSchema(${pascal}Schema), 400: ErrorResponseSchema, ...authErrors },
 };
 
@@ -291,14 +347,33 @@ export const delete${singular.pascal}Docs = { ...base, summary: "Delete a ${sing
 `;
 };
 
-export const repositoryTypesTemplate = ({ names, owned }: TemplateContext) => {
+export const repositoryTypesTemplate = (context: TemplateContext) => {
+  const { names, owned } = context;
   const { pascal } = names.singular;
   const type = owned ? "CrudRepository" : "PublicCrudRepository";
-  return `import type { ${type} } from "../../../lib/crud.ts";
+  if (!hasListOptions(listOf(context))) {
+    return `import type { ${type} } from "../../../lib/crud.ts";
 import type { Create${pascal}Input, ${pascal}, Update${pascal}Input } from "../schema.ts";
 
 /** Data access for ${names.plural.words}. Add query methods here as the module grows. */
 export type ${pascal}Repository = ${type}<${pascal}, Create${pascal}Input, Update${pascal}Input>;
+`;
+  }
+  const P = names.plural.pascal;
+  return `import type { ${type} } from "../../../lib/crud.ts";
+import type { PaginationQuery } from "../../../lib/pagination.ts";
+import type { Create${pascal}Input, List${P}Query, ${pascal}, Update${pascal}Input } from "../schema.ts";
+
+/** Pagination plus the optional search, sort, and filters of the list route. */
+export type ${pascal}ListQuery = PaginationQuery & Partial<List${P}Query>;
+
+/** Data access for ${names.plural.words}. Add query methods here as the module grows. */
+export type ${pascal}Repository = ${type}<
+  ${pascal},
+  Create${pascal}Input,
+  Update${pascal}Input,
+  ${pascal}ListQuery
+>;
 `;
 };
 
@@ -328,11 +403,67 @@ export const repositoryDrizzleTemplate = (context: TemplateContext) => {
   const table = plural.camel;
   const u = owned ? "userId, " : "";
   const scope = owned ? "byOwner(userId, id)" : `eq(${table}.id, id)`;
+  const list = listOf(context);
+  const custom = hasListOptions(list);
+  const operators = new Set(["count", "desc", "eq", ...(owned ? ["and"] : [])]);
+  if (custom) operators.add("and");
+  if (list.search.length > 0) for (const name of ["ilike", "or"]) operators.add(name);
+  if (list.sort.length > 0) operators.add("asc");
 
-  return `import { ${owned ? "and, " : ""}count, desc, eq } from "drizzle-orm";
+  const conditions = [
+    ...(owned ? [`eq(${table}.userId, userId)`] : []),
+    ...(list.search.length > 0
+      ? [
+          `pattern ? or(${list.search.map((f) => `ilike(${table}.${f.name}, pattern)`).join(", ")}) : undefined`,
+        ]
+      : []),
+    ...list.filter.map(
+      (f) => `query.${f.name} === undefined ? undefined : eq(${table}.${f.name}, query.${f.name})`,
+    ),
+  ];
+  // `%` and `_` in the search text must match literally
+  const searchPattern = [
+    "const pattern = query.search ? `%$",
+    "{escapeLike(query.search)}%` : undefined;",
+  ].join("");
+  const customList = `  list: async (${u}query) => {
+    ${list.search.length > 0 ? searchPattern : ""}
+    const where = and(
+${lines(
+  conditions.map((condition) => `${condition},`),
+  "      ",
+)}
+    );
+    ${
+      list.sort.length > 0
+        ? `const direction = query.order === "asc" ? asc : desc;
+    const sortColumn = {
+      createdAt: ${table}.createdAt,
+${lines(
+  list.sort.map((f) => `${f.name}: ${table}.${f.name},`),
+  "      ",
+)}
+    }[query.sort ?? "createdAt"];`
+        : `const direction = desc;
+    const sortColumn = ${table}.createdAt;`
+    }
+    const [rows, [totalRow]] = await Promise.all([
+      db
+        .select()
+        .from(${table})
+        .where(where)
+        .orderBy(direction(sortColumn), direction(${table}.id))
+        .limit(query.pageSize)
+        .offset(toOffset(query)),
+      db.select({ total: count() }).from(${table}).where(where),
+    ]);
+    return { items: rows.map(to${singular.pascal}), total: totalRow?.total ?? 0 };
+  },`;
+
+  return `import { ${[...operators].sort().join(", ")} } from "drizzle-orm";
 import type { AppDatabase } from "../../../db/drizzle/index.ts";
 import { type ${singular.pascal}Row, ${table} } from "../../../db/drizzle/schema/${plural.kebab}.ts";
-import { withoutUndefined } from "../../../lib/crud.ts";
+import { ${list.search.length > 0 ? "escapeLike, " : ""}withoutUndefined } from "../../../lib/crud.ts";
 import { toOffset } from "../../../lib/pagination.ts";
 import type { ${singular.pascal} } from "../schema.ts";
 import type { ${singular.pascal}Repository } from "./types.ts";
@@ -340,7 +471,10 @@ import type { ${singular.pascal}Repository } from "./types.ts";
 ${toEntity(context, `${singular.pascal}Row`, "drizzle")}
 ${owned ? `\nconst byOwner = (userId: string, id: string) => and(eq(${table}.userId, userId), eq(${table}.id, id));\n` : ""}
 export const create${singular.pascal}Repository = ({ client: db }: AppDatabase): ${singular.pascal}Repository => ({
-  list: async (${u}query) => {
+${
+  custom
+    ? customList
+    : `  list: async (${u}query) => {
     ${owned ? `const where = eq(${table}.userId, userId);` : ""}
     const [rows, [totalRow]] = await Promise.all([
       db
@@ -353,7 +487,8 @@ export const create${singular.pascal}Repository = ({ client: db }: AppDatabase):
       db.select({ total: count() }).from(${table})${owned ? ".where(where)" : ""},
     ]);
     return { items: rows.map(to${singular.pascal}), total: totalRow?.total ?? 0 };
-  },
+  },`
+}
 
   findById: async (${u}id) => {
     const [row] = await db.select().from(${table}).where(${scope}).limit(1);
@@ -392,10 +527,53 @@ export const repositoryPrismaTemplate = (context: TemplateContext) => {
   const model = singular.camel;
   const u = owned ? "userId, " : "";
   const where = owned ? "{ id, userId }" : "{ id }";
+  const list = listOf(context);
+  const customList = `  list: async (${u}query) => {
+    ${list.search.length > 0 ? "// Prisma does not escape LIKE wildcards: `%` and `_` in the search text must match literally\n    const pattern = query.search ? escapeLike(query.search) : undefined;" : ""}
+    const where = {
+${lines(
+  [
+    ...(owned ? ["userId,"] : []),
+    ...(list.search.length > 0
+      ? [
+          `...(pattern && {
+        OR: [
+${lines(
+  list.search.map((f) => `{ ${f.name}: { contains: pattern, mode: "insensitive" as const } },`),
+  "          ",
+)}
+        ],
+      }),`,
+        ]
+      : []),
+    ...list.filter.map((f) => `...(query.${f.name} !== undefined && { ${f.name}: query.${f.name} }),`),
+  ],
+  "      ",
+)}
+    };
+    const order = query.order ?? "desc";
+    const orderBy = {
+      createdAt: { createdAt: order },
+${lines(
+  list.sort.map((f) => `${f.name}: { ${f.name}: order },`),
+  "      ",
+)}
+    }[query.sort ?? "createdAt"];
+    const [rows, total] = await prisma.$transaction([
+      prisma.${model}.findMany({
+        where,
+        orderBy: [orderBy, { id: order }],
+        take: query.pageSize,
+        skip: toOffset(query),
+      }),
+      prisma.${model}.count({ where }),
+    ]);
+    return { items: rows.map(to${singular.pascal}), total };
+  },`;
 
   return `import type { AppDatabase } from "../../../db/prisma/index.ts";
 import type { ${singular.pascal} as ${singular.pascal}Row } from "../../../generated/prisma/client.ts";
-import { withoutUndefined } from "../../../lib/crud.ts";
+import { ${list.search.length > 0 ? "escapeLike, " : ""}withoutUndefined } from "../../../lib/crud.ts";
 import { toOffset } from "../../../lib/pagination.ts";
 import type { ${singular.pascal} } from "../schema.ts";
 import type { ${singular.pascal}Repository } from "./types.ts";
@@ -403,7 +581,10 @@ import type { ${singular.pascal}Repository } from "./types.ts";
 ${toEntity(context, `${singular.pascal}Row`, "prisma")}
 
 export const create${singular.pascal}Repository = ({ client: prisma }: AppDatabase): ${singular.pascal}Repository => ({
-  list: async (${u}query) => {
+${
+  hasListOptions(list)
+    ? customList
+    : `  list: async (${u}query) => {
     const [rows, total] = await prisma.$transaction([
       prisma.${model}.findMany({
         ${owned ? "where: { userId }," : ""}
@@ -414,7 +595,8 @@ export const create${singular.pascal}Repository = ({ client: prisma }: AppDataba
       prisma.${model}.count(${owned ? "{ where: { userId } }" : ""}),
     ]);
     return { items: rows.map(to${singular.pascal}), total };
-  },
+  },`
+}
 
   findById: async (${u}id) => {
     const row = await prisma.${model}.findFirst({ where: ${where} });
@@ -441,21 +623,23 @@ export const create${singular.pascal}Repository = ({ client: prisma }: AppDataba
 `;
 };
 
-export const serviceTemplate = ({ names, owned }: TemplateContext) => {
+export const serviceTemplate = (context: TemplateContext) => {
+  const { names, owned } = context;
+  const custom = hasListOptions(listOf(context));
   const { pascal, words } = names.singular;
   const capitalized = words.charAt(0).toUpperCase() + words.slice(1);
   const param = owned ? "userId: string, " : "";
   const u = owned ? "userId, " : "";
 
   return `import { HttpError } from "../../lib/errors.ts";
-import type { Page, PaginationQuery } from "../../lib/pagination.ts";
-import type { ${pascal}Repository } from "./repository/index.ts";
+import type { Page${custom ? "" : ", PaginationQuery"} } from "../../lib/pagination.ts";
+import type { ${pascal}Repository } from "./repository/index.ts";${custom ? `\nimport type { ${pascal}ListQuery } from "./repository/types.ts";` : ""}
 import type { Create${pascal}Input, ${pascal}, Update${pascal}Input } from "./schema.ts";
 
 const notFound = (): HttpError => new HttpError(404, "${capitalized} not found");
 
 export interface ${pascal}Service {
-  list(${param}query: PaginationQuery): Promise<Page<${pascal}>>;
+  list(${param}query: ${custom ? `${pascal}ListQuery` : "PaginationQuery"}): Promise<Page<${pascal}>>;
   get(${param}id: string): Promise<${pascal}>;
   create(${param}input: Create${pascal}Input): Promise<${pascal}>;
   update(${param}id: string, input: Update${pascal}Input): Promise<${pascal}>;
@@ -649,15 +833,60 @@ ${declarations.map((declaration) => `\n${declaration}\n`).join("")}`;
 // Tests
 // ---------------------------------------------------------------------------
 
-export const fakeTemplate = ({ names, fields, owned }: TemplateContext) => {
+export const fakeTemplate = (context: TemplateContext) => {
+  const { names, fields, owned } = context;
   const { singular } = names;
   const S = singular.pascal;
+  const list = listOf(context);
+  const custom = hasListOptions(list);
+  const sortArg = list.sort.length > 0 ? ", query" : "";
+  const searchable = list.search.map((f) =>
+    f.optional
+      ? `(row.${f.name} ?? "").toLowerCase().includes(term)`
+      : `row.${f.name}.toLowerCase().includes(term)`,
+  );
+  // The same rules as the ORM implementation, so the contract tests hold both to one behaviour
+  const listHelpers = custom
+    ? `
+const matches = (row: ${S}, query: ${S}ListQuery): boolean => {
+  ${list.search.length > 0 ? `const term = query.search?.toLowerCase();\n  if (term && !(${searchable.join(" || ")})) return false;` : ""}
+${lines(
+  list.filter.map(
+    (f) => `if (query.${f.name} !== undefined && row.${f.name} !== query.${f.name}) return false;`,
+  ),
+  "  ",
+)}
+  return true;
+};
+
+const sorted = (rows: ${S}[]${list.sort.length > 0 ? `, query: ${S}ListQuery` : ""}): ${S}[] => {
+  ${
+    list.sort.length > 0
+      ? `const value = (row: ${S}) =>
+    ({
+      createdAt: row.createdAt.getTime(),
+${lines(
+  list.sort.map((f) => `${f.name}: ${fakeSortValue(f)},`),
+  "      ",
+)}
+    })[query.sort ?? "createdAt"];
+  const direction = query.order === "asc" ? 1 : -1;`
+      : `const value = (row: ${S}) => row.createdAt.getTime();
+  const direction = -1;`
+  }
+  return [...rows].sort((a, b) => {
+    const [left, right] = [value(a), value(b)];
+    return left === right ? 0 : (left < right ? -1 : 1) * direction;
+  });
+};
+`
+    : "";
   const rendered = fields.map((f) => fieldLines(f, names));
   const create = rendered.map((f) => f.sampleCreate);
   const update = rendered.map((f) => f.sampleUpdate);
   const merge = rendered.map((f) => f.merge);
   const header = `import { randomUUID } from "node:crypto";
-import type { ${S}Repository } from "../../src/modules/${names.plural.kebab}/repository/types.ts";
+import type { ${custom ? `${S}ListQuery, ` : ""}${S}Repository } from "../../src/modules/${names.plural.kebab}/repository/types.ts";
 import type { ${S} } from "../../src/modules/${names.plural.kebab}/schema.ts";
 
 /** Valid JSON bodies for POST and PATCH. */
@@ -668,7 +897,7 @@ ${lines(create, "  ")}
 export const ${singular.camel}UpdateSample = {
 ${lines(update, "  ")}
 };
-`;
+${listHelpers}`;
 
   if (!owned) {
     return `${header}
@@ -680,7 +909,7 @@ export const createMemory${S}Repository = (): ${S}Repository => {
 
   return {
     list: async (query) => {
-      const all = [...rows.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      const all = ${custom ? `sorted([...rows.values()].filter((row) => matches(row, query))${sortArg});` : "[...rows.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());"}
       const start = (query.page - 1) * query.pageSize;
       return { items: all.slice(start, start + query.pageSize), total: all.length };
     },
@@ -722,11 +951,10 @@ export const createMemory${S}Repository = (): ${S}Repository => {
 
   return {
     list: async (userId, query) => {
-      const matching = [...rows.values()]
-        .filter((row) => row.userId === userId)
-        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      const own = [...rows.values()].filter((row) => row.userId === userId)${custom ? ".map(strip)" : ""};
+      const matching = ${custom ? `sorted(own.filter((row) => matches(row, query))${sortArg});` : "own.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());"}
       const start = (query.page - 1) * query.pageSize;
-      return { items: matching.slice(start, start + query.pageSize).map(strip), total: matching.length };
+      return { items: matching.slice(start, start + query.pageSize)${custom ? "" : ".map(strip)"}, total: matching.length };
     },
     findById: async (userId, id) => {
       const row = owned(userId, id);
@@ -755,7 +983,9 @@ ${lines(merge, "        ")}
 `;
 };
 
-export const routeTestTemplate = ({ names, fields, owned }: TemplateContext) => {
+export const routeTestTemplate = (context: TemplateContext) => {
+  const { names, fields, owned } = context;
+  const listOptions = listOf(context);
   const { singular, plural } = names;
   const firstField = fields[0];
   const invalidPayload = firstField
@@ -827,7 +1057,26 @@ ${
 `
     : ""
 }
-  it("validates input", async () => {
+${
+  hasListOptions(listOptions)
+    ? `  it("accepts the list options and rejects unknown values", async () => {
+    const created = await create();
+    const query = "${[
+      ...(listOptions.search.length > 0 ? ["search=sample"] : []),
+      ...(listOptions.sort.length > 0 ? [`sort=${listOptions.sort[0]?.name}&order=asc`] : []),
+    ].join("&")}";
+
+    const found = await app().inject({ method: "GET", url: \`\${url}?\${query}\`${as("alice")} });
+    expect(found.statusCode).toBe(200);
+    expect(found.json<{ items: { id: string }[] }>().items.map((item) => item.id)).toContain(created.id);
+
+    const invalid = await app().inject({ method: "GET", url: \`\${url}?${listOptions.sort.length > 0 ? "sort=nope" : "pageSize=0"}\`${as("alice")} });
+    expect(invalid.statusCode).toBe(400);
+  });
+
+`
+    : ""
+}  it("validates input", async () => {
     const invalid = await app().inject({ method: "POST", url${as("alice")}, payload: ${invalidPayload} });
     expect(invalid.statusCode).toBe(400);
 
@@ -839,19 +1088,73 @@ ${
 `;
 };
 
-export const contractTestTemplate = (
-  { names, owned }: TemplateContext,
-  variant: "memory" | "drizzle" | "prisma",
-) => {
+/** Whether the POST sample sorts before the PATCH sample (see the samples in `typeSpec`). */
+const firstSampleIsSmaller = (field: Field): boolean =>
+  field.type === "string" || field.type === "text" || field.type === "datetime";
+
+/** Cases for `describeListContract`, derived from the two samples every module has. */
+const listCases = (context: TemplateContext): string[] => {
+  const { names } = context;
+  const list = listOf(context);
+  const page = "page: 1, pageSize: 10";
+  const entry = (name: string, query: string, expected: string[]) =>
+    `{ name: "${name}", query: { ${page}${query ? `, ${query}` : ""} }, expected: [${expected.map((key) => `"${key}"`).join(", ")}] },`;
+  const ascending = (field: Field) =>
+    firstSampleIsSmaller(field) ? ["first", "second"] : ["second", "first"];
+
+  return [
+    entry("lists newest first by default", "", ["second", "first"]),
+    ...(list.search.length > 0
+      ? [
+          entry(
+            `searches ${list.search.map((f) => f.name).join(", ")} without regard to case`,
+            'search: "SAMPLE"',
+            ["first"],
+          ),
+          entry("matches % and _ in the search text literally", 'search: "%_"', []),
+        ]
+      : []),
+    ...list.sort.flatMap((f) => [
+      entry(`sorts by ${f.name} ascending`, `sort: "${f.name}", order: "asc"`, ascending(f)),
+      entry(`sorts by ${f.name} descending`, `sort: "${f.name}", order: "desc"`, [...ascending(f)].reverse()),
+    ]),
+    ...list.filter.map((f) =>
+      entry(`filters by ${f.name}`, `${f.name}: ${typeSpec(f, names).sample.create}`, ["first"]),
+    ),
+  ];
+};
+
+export const contractTestTemplate = (context: TemplateContext, variant: "memory" | "drizzle" | "prisma") => {
+  const { names, owned } = context;
+  const custom = hasListOptions(listOf(context));
   const { singular, plural } = names;
   const S = singular.pascal;
   const contract = owned ? "describeCrudRepositoryContract" : "describePublicCrudRepositoryContract";
-  const imports = `import {
-  Create${S}BodySchema,
+  const imports = `${custom ? `import type { ${S}ListQuery } from "../../src/modules/${plural.kebab}/repository/types.ts";\n` : ""}import {
+  Create${S}BodySchema,${custom ? `\n  type Create${S}Input,` : ""}
   Update${S}BodySchema,
 } from "../../src/modules/${plural.kebab}/schema.ts";
 import { ${singular.camel}Sample, ${singular.camel}UpdateSample${variant === "memory" ? `, createMemory${S}Repository` : ""} } from "../fakes/${plural.kebab}.ts";
-import { ${contract} } from "./crud-contract.ts";`;
+import { ${contract}${custom ? ", describeListContract" : ""} } from "./crud-contract.ts";`;
+  const owner = owned ? '"alice", ' : "";
+  const listContract = (harness: string) =>
+    custom
+      ? `
+describeListContract<Create${S}Input, ${S}ListQuery>(
+  "${plural.words} (${variant === "memory" ? "memory fake" : variant})",
+  async () => {
+${harness}
+  },
+  {
+    first: Create${S}BodySchema.parse(${singular.camel}Sample),
+    second: Create${S}BodySchema.parse(${singular.camel}UpdateSample),
+    cases: [
+${lines(listCases(context), "      ")}
+    ],
+  },
+);
+`
+      : "";
   const samples = `{
   create: Create${S}BodySchema.parse(${singular.camel}Sample),
   update: Update${S}BodySchema.parse(${singular.camel}UpdateSample),
@@ -876,7 +1179,15 @@ ${contract}(
   },
   ${samples},
 );
-`;
+${listContract(`    let repository = createMemory${S}Repository();
+    return {
+      create: (input) => repository.create(${owner}input),
+      list: (query) => repository.list(${owner}query),
+      reset: async () => {
+        repository = createMemory${S}Repository();
+      },
+      close: async () => undefined,
+    };`)}`;
   }
 
   const harness = variant === "drizzle" ? "startDrizzleTestDatabase" : "startPrismaTestDatabase";
@@ -899,5 +1210,15 @@ ${contract}(
   },
   ${samples},
 );
-`;
+${listContract(`    const { database, postgres } = await ${harness}();
+    const repository = create${S}Repository(database);
+    return {
+      create: (input) => repository.create(${owner}input),
+      list: (query) => repository.list(${owner}query),
+      reset: () => postgres.truncate(["${plural.snake}"]),
+      close: async () => {
+        await database.close();
+        await postgres.stop();
+      },
+    };`)}`;
 };

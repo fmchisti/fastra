@@ -5,7 +5,16 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseArgs, promisify } from "node:util";
 import { addImport, insertBeforeMarker } from "./gen/edit.ts";
-import { FIELD_SYNTAX, type Field, type ModuleNames, parseFields, parseModuleName } from "./gen/model.ts";
+import {
+  FIELD_SYNTAX,
+  type Field,
+  type ListOptions,
+  type ModuleNames,
+  NO_LIST_OPTIONS,
+  parseFields,
+  parseListOptions,
+  parseModuleName,
+} from "./gen/model.ts";
 import { canPrompt, intro, note, promptConfirm, promptFields, promptModuleName } from "./gen/prompt.ts";
 import * as t from "./gen/templates.ts";
 
@@ -16,12 +25,15 @@ Scaffold a CRUD module (routes, schema, service, repository, table, migration, t
 
 Usage:
   pnpm gen:module                 asks for the name and fields
-  pnpm gen:module <name> --fields "<field:type[?]> ..." [--plural <name>] [--public] [--migrate] [--dry-run]
+  pnpm gen:module <name> --fields "<field:type[?]> ..." [--search <fields>] [--sort <fields>] [--filter <fields>]
+                                 [--plural <name>] [--public] [--migrate] [--dry-run]
 
 Example:
   pnpm gen:module product --fields "name:string price:float stock:int description:text? releasedAt:datetime?"
 
 ${FIELD_SYNTAX}
+List route: --search name,description (?search=, case-insensitive), --sort name,price (?sort=&order=),
+--filter status (?status=). Default: pagination only, newest first.
 --migrate also applies the migration (the database must be running).
 Adds: id, createdAt, updatedAt, and userId when the project has auth (records are scoped to their owner
 and routes require sign-in). --public, or a project without auth, creates a public resource instead.
@@ -45,8 +57,14 @@ interface FileWrite {
   content: string;
 }
 
-export const planModule = (names: ModuleNames, fields: Field[], orm: Orm, owned = true): FileWrite[] => {
-  const context = { names, fields, owned };
+export const planModule = (
+  names: ModuleNames,
+  fields: Field[],
+  orm: Orm,
+  owned = true,
+  list: ListOptions = NO_LIST_OPTIONS,
+): FileWrite[] => {
+  const context = { names, fields, owned, list };
   const moduleDir = `src/modules/${names.plural.kebab}`;
   return [
     { path: `${moduleDir}/schema.ts`, content: t.schemaTemplate(context) },
@@ -219,6 +237,10 @@ export interface GenerateOptions {
   skipTooling?: boolean;
   /** Apply the new migration to the database right away. */
   migrate?: boolean;
+  /** Comma-separated field names for the list route's `?search=`, `?sort=`, and exact-match filters. */
+  search?: string | undefined;
+  sort?: string | undefined;
+  filter?: string | undefined;
 }
 
 export const generateModule = async (options: GenerateOptions): Promise<string[]> => {
@@ -229,7 +251,8 @@ export const generateModule = async (options: GenerateOptions): Promise<string[]
   // Without auth there are no users to own records, so modules are public
   const hasAuth = existsSync(path.join(root, "src/auth/index.ts"));
   const owned = hasAuth && options.public !== true;
-  const files = planModule(names, fields, orm, owned);
+  const list = parseListOptions(fields, options);
+  const files = planModule(names, fields, orm, owned, list);
 
   const conflicts = files.filter((file) => existsSync(path.join(root, file.path)));
   if (conflicts.length > 0) {
@@ -267,6 +290,9 @@ const main = async () => {
       "dry-run": { type: "boolean", default: false },
       public: { type: "boolean", default: false },
       migrate: { type: "boolean", default: false },
+      search: { type: "string" },
+      sort: { type: "string" },
+      filter: { type: "string" },
       help: { type: "boolean", default: false },
     },
   });
@@ -303,6 +329,9 @@ const main = async () => {
     dryRun: values["dry-run"],
     public: isPublic,
     migrate,
+    search: values.search,
+    sort: values.sort,
+    filter: values.filter,
   });
 
   const names = parseModuleName(name, values.plural);

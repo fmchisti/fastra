@@ -186,7 +186,7 @@ Local services: `pnpm db:up` / `pnpm db:down` (Docker).
 <!-- @setup-if orm!=none -->
 
 Database:
-- `pnpm gen:module <name> --fields "..."`: scaffold a CRUD module with table, migration, and tests
+- `pnpm gen:module <name> --fields "..."`: scaffold a CRUD module with table, migration, and tests. `--search`, `--sort`, `--filter` add list query parameters
 - `pnpm gen:field <module> --fields "..."`: add fields to a generated module (schema, table, repository, test fake, migration)
 - `pnpm gen:remove <module>`: delete a generated module, its registrations, and create the drop-table migration
 - Run `pnpm gen:module` or `pnpm gen:field <module>` without `--fields` to be asked for everything

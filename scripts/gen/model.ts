@@ -223,3 +223,61 @@ export const parseFields = (input: string): Field[] => {
     return field;
   });
 };
+
+/** `--search`, `--sort`, `--filter`: what the list route accepts besides pagination. */
+export interface ListOptions {
+  /** `?search=`: case-insensitive "contains" on these fields */
+  search: Field[];
+  /** `?sort=<field>&order=asc|desc`, besides the default `createdAt` */
+  sort: Field[];
+  /** `?<field>=<value>`: exact match */
+  filter: Field[];
+}
+
+export const NO_LIST_OPTIONS: ListOptions = { search: [], sort: [], filter: [] };
+
+const LIST_RULES: Record<keyof ListOptions, { types: FieldType[]; requiredOnly: boolean; why: string }> = {
+  search: { types: ["string", "text"], requiredOnly: false, why: "text is searched" },
+  // Optional fields sort NULLs differently per database, and enum/uuid have no useful order
+  sort: {
+    types: ["string", "text", "int", "float", "decimal", "boolean", "datetime"],
+    requiredOnly: true,
+    why: "required (no ?) text, number, boolean, and datetime fields can be sorted",
+  },
+  filter: {
+    types: ["string", "int", "boolean", "uuid", "enum"],
+    requiredOnly: false,
+    why: "string, int, boolean, uuid, and enum fields can be filtered",
+  },
+};
+
+const RESERVED_QUERY = new Set(["page", "pageSize", "search", "sort", "order"]);
+
+/** Resolve `--search name,description --sort name,price --filter status` against the module's fields. */
+export const parseListOptions = (
+  fields: Field[],
+  input: Partial<Record<keyof ListOptions, string | undefined>>,
+): ListOptions => {
+  const resolve = (option: keyof ListOptions): Field[] => {
+    const rule = LIST_RULES[option];
+    const names = (input[option] ?? "").split(/[\s,]+/).filter(Boolean);
+    return [...new Set(names)].map((name) => {
+      const field = fields.find((candidate) => candidate.name === name);
+      if (!field)
+        throw new Error(
+          `--${option} ${name}: no such field. Fields: ${fields.map((f) => f.name).join(", ")}`,
+        );
+      if (!rule.types.includes(field.type) || (rule.requiredOnly && field.optional)) {
+        throw new Error(`--${option} ${name}: only ${rule.why}`);
+      }
+      if (option === "filter" && RESERVED_QUERY.has(name)) {
+        throw new Error(`--filter ${name}: "${name}" is already a query parameter of the list route`);
+      }
+      return field;
+    });
+  };
+  return { search: resolve("search"), sort: resolve("sort"), filter: resolve("filter") };
+};
+
+export const hasListOptions = (list: ListOptions): boolean =>
+  list.search.length + list.sort.length + list.filter.length > 0;

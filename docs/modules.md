@@ -10,6 +10,7 @@ pnpm gen:module product --fields "name:string price:decimal stock:int=0 status:e
 
 - Or run `pnpm gen:module` alone: it asks for the name and each field, then prints the command it ran.
 - Field syntax: `name:type[?][!index][=default]`. Types: `string`, `text`, `int`, `float`, `decimal`, `boolean`, `datetime`, `uuid`, `enum(a,b)`. Run `pnpm gen:module --help` for details.
+- `--search name --sort name,price --filter status` make the list route accept `?search=`, `?sort=&order=`, and `?status=`. Without them the list is paginated, newest first.
 - `--migrate` applies the migration (the database must be running: `pnpm db:up`). Without it, run `pnpm db:migrate`.
 - `--dry-run` lists the files. `--public` creates a resource without an owner. `--plural people` for irregular names.
 - `pnpm routes` shows what was registered.
@@ -76,7 +77,7 @@ Test it through the route (`test/<module>.test.ts`) and assert the error body.
 1. Add the method to `repository/types.ts`, for example `findBySku(userId: string, sku: string): Promise<Product | null>`.
 2. Implement it in `repository/<orm>.ts`, scoped by `userId`, and in `test/fakes/<module>.ts`.
 3. Add a case to the contract test in `test/repositories/` so the fake and the ORM implementation are held to the same behaviour.
-4. For a list filter, extend the query schema: `querystring: PaginationQuerySchema.extend({ status: z.enum([...]).optional() })`, and pass it through the service. Keep lists paginated and ordered.
+4. For a list filter on a new module, prefer `gen:module --filter`. On an existing one, extend the query schema: `querystring: PaginationQuerySchema.extend({ status: z.enum([...]).optional() })`, and pass it through the service. Keep lists paginated and ordered.
 
 ## A relation to another module
 

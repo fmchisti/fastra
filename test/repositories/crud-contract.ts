@@ -159,3 +159,50 @@ export const describePublicCrudRepositoryContract = <
     });
   });
 };
+
+export interface ListHarness<TCreate, TQuery> {
+  create(input: TCreate): Promise<{ id: string }>;
+  list(query: TQuery): Promise<{ items: { id: string }[]; total: number }>;
+  reset(): Promise<void>;
+  close(): Promise<void>;
+}
+
+export interface ListCase<TQuery> {
+  name: string;
+  query: TQuery;
+  /** Which of the two records the list returns, in order */
+  expected: ("first" | "second")[];
+}
+
+/**
+ * Search, sort, and filters of a list (`pnpm gen:module --search ... --sort ... --filter ...`).
+ * Runs against the in-memory fake and the ORM, so both give the same answers.
+ * `first` is created before `second`. Pass both type arguments, so query literals are checked.
+ */
+export const describeListContract = <TCreate, TQuery>(
+  name: string,
+  createHarness: () => Promise<ListHarness<TCreate, TQuery>>,
+  samples: { first: TCreate; second: TCreate; cases: ListCase<TQuery>[] },
+) => {
+  describe(`list contract: ${name}`, () => {
+    let harness: ListHarness<TCreate, TQuery>;
+
+    beforeAll(async () => {
+      harness = await createHarness();
+    });
+    beforeEach(() => harness.reset());
+    afterAll(() => harness.close());
+
+    it.each(samples.cases)("$name", async ({ query, expected }) => {
+      const first = await harness.create(samples.first);
+      await tick();
+      const second = await harness.create(samples.second);
+      const ids = { first: first.id, second: second.id };
+
+      const page = await harness.list(query);
+
+      expect(page.items.map((item) => item.id)).toEqual(expected.map((key) => ids[key]));
+      expect(page.total).toBe(expected.length);
+    });
+  });
+};
