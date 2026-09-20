@@ -41,3 +41,7 @@ The API then uses the workspace's lockfile and pnpm version. Install-script appr
 | `--no-git` | skip `git init` and the initial commit (always skipped inside an existing git repository) |
 
 Requires Node.js 22.12+ and pnpm (`corepack enable`).
+
+## License
+
+MIT © Fahim Mahmud Chisti

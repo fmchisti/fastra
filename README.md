@@ -317,6 +317,12 @@ Multi-stage image on `node:22-alpine`, production dependencies only, runs as the
 - **Neon / RDS / other**: paste the connection string (add `?sslmode=require` if needed)
 <!-- @setup-endif -->
 
+<!-- @setup-template-only -->
+## License
+
+[MIT](./LICENSE) © Fahim Mahmud Chisti. Projects created from Fastra are yours: setup removes this license file and the `author` and `license` fields, so you choose your own.
+
+<!-- @setup-endif -->
 ## Learn more
 
 - [AGENTS.md](./AGENTS.md): rules and workflow for humans and AI agents
