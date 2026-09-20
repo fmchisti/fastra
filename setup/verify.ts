@@ -94,6 +94,12 @@ const verify = async (selection: Selection): Promise<Result> => {
         ],
         { cwd: dir, timeout: 300_000 },
       );
+      // ...and gen:field must fit into what gen:module wrote, with a second migration
+      await exec(
+        "pnpm",
+        ["exec", "tsx", "scripts/gen-field.ts", "product-item", "--fields", "sku:string? weight:float"],
+        { cwd: dir, timeout: 300_000 },
+      );
     }
     await exec("pnpm", ["exec", "tsc", "--noEmit"], { cwd: dir, timeout: 300_000 });
     // Generated projects must also be lint- and format-clean (no leftovers from directives)

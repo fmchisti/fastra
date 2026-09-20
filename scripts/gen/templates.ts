@@ -60,19 +60,56 @@ const SAMPLE: Record<FieldType, { create: string; update: string }> = {
 
 const lines = (items: string[], indent: string) => items.map((item) => `${indent}${item}`).join("\n");
 
+/**
+ * Every line one field contributes to a module. `gen:module` joins them into new files and
+ * `gen:field` inserts them into existing ones, so both always produce the same code.
+ */
+export interface FieldLines {
+  /** schema.ts: response, POST body, PATCH body */
+  response: string;
+  create: string;
+  update: string;
+  /** repository: row → entity mapper */
+  mapper: string;
+  /** Drizzle column and the pg-core builder it imports */
+  drizzleColumn: string;
+  drizzleBuilder: string;
+  /** Prisma model field */
+  prismaField: string;
+  /** test fake: POST sample, PATCH sample, update merge */
+  sampleCreate: string;
+  sampleUpdate: string;
+  merge: string;
+}
+
+export const fieldLines = (f: Field): FieldLines => {
+  const prisma = PRISMA_TYPE[f.type];
+  const map = f.column === f.name ? "" : `@map("${f.column}")`;
+  const attributes = [map, prisma.attributes].filter(Boolean).join(" ");
+  return {
+    response: `${f.name}: ${RESPONSE_ZOD[f.type]}${f.optional ? ".nullable()" : ""},`,
+    create: `${f.name}: ${INPUT_ZOD[f.type]}${f.optional ? ".nullable().default(null)" : ""},`,
+    update: `${f.name}: ${INPUT_ZOD[f.type]}${f.optional ? ".nullable()" : ""}.optional(),`,
+    mapper: `${f.name}: row.${f.name},`,
+    drizzleColumn: `${f.name}: ${DRIZZLE_BUILDER[f.type].call(f.column)}${f.optional ? "" : ".notNull()"},`,
+    drizzleBuilder: DRIZZLE_BUILDER[f.type].fn,
+    prismaField: `${f.name} ${prisma.type}${f.optional ? "?" : ""}${attributes ? ` ${attributes}` : ""}`,
+    sampleCreate: `${f.name}: ${SAMPLE[f.type].create},`,
+    sampleUpdate: `${f.name}: ${SAMPLE[f.type].update},`,
+    merge: `${f.name}: input.${f.name} === undefined ? row.${f.name} : input.${f.name},`,
+  };
+};
+
 // ---------------------------------------------------------------------------
 // src/modules/<plural>/
 // ---------------------------------------------------------------------------
 
 export const schemaTemplate = ({ names, fields }: TemplateContext) => {
   const { pascal } = names.singular;
-  const response = fields.map((f) => `${f.name}: ${RESPONSE_ZOD[f.type]}${f.optional ? ".nullable()" : ""},`);
-  const create = fields.map(
-    (f) => `${f.name}: ${INPUT_ZOD[f.type]}${f.optional ? ".nullable().default(null)" : ""},`,
-  );
-  const update = fields.map(
-    (f) => `${f.name}: ${INPUT_ZOD[f.type]}${f.optional ? ".nullable()" : ""}.optional(),`,
-  );
+  const rendered = fields.map(fieldLines);
+  const response = rendered.map((f) => f.response);
+  const create = rendered.map((f) => f.create);
+  const update = rendered.map((f) => f.update);
 
   return `import { z } from "zod";
 import { ErrorResponseSchema } from "../../lib/errors.ts";
@@ -174,7 +211,7 @@ const toEntity = ({ names, fields }: TemplateContext, rowType: string) => {
   return `const to${pascal} = (row: ${rowType}): ${pascal} => ({
   id: row.id,
 ${lines(
-  fields.map((f) => `${f.name}: row.${f.name},`),
+  fields.map((f) => fieldLines(f).mapper),
   "  ",
 )}
   createdAt: row.createdAt,
@@ -457,10 +494,8 @@ export default ${singular.camel}Routes;
 export const drizzleTableTemplate = ({ names, fields, owned }: TemplateContext) => {
   const { singular, plural } = names;
   const builders = new Set(["index", "pgTable", "timestamp", "uuid", ...(owned ? ["text"] : [])]);
-  for (const field of fields) builders.add(DRIZZLE_BUILDER[field.type].fn);
-  const columns = fields.map(
-    (f) => `${f.name}: ${DRIZZLE_BUILDER[f.type].call(f.column)}${f.optional ? "" : ".notNull()"},`,
-  );
+  for (const field of fields) builders.add(fieldLines(field).drizzleBuilder);
+  const columns = fields.map((f) => fieldLines(f).drizzleColumn);
 
   return `import { sql } from "drizzle-orm";
 import { ${[...builders].sort().join(", ")} } from "drizzle-orm/pg-core";
@@ -482,13 +517,7 @@ export type ${singular.pascal}Row = typeof ${plural.camel}.$inferSelect;
 
 export const prismaModelTemplate = ({ names, fields, owned }: TemplateContext) => {
   const { singular, plural } = names;
-  const field = (name: string, type: string, attributes: string) =>
-    `  ${name} ${type}${attributes ? ` ${attributes}` : ""}`;
-  const columns = fields.map((f) => {
-    const { type, attributes } = PRISMA_TYPE[f.type];
-    const map = f.column === f.name ? "" : `@map("${f.column}")`;
-    return field(f.name, `${type}${f.optional ? "?" : ""}`, [map, attributes].filter(Boolean).join(" "));
-  });
+  const columns = fields.map((f) => `  ${fieldLines(f).prismaField}`);
 
   return `model ${singular.pascal} {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -509,11 +538,10 @@ ${owned ? '  // Auth provider user id. No foreign key, so any auth provider work
 export const fakeTemplate = ({ names, fields, owned }: TemplateContext) => {
   const { singular } = names;
   const S = singular.pascal;
-  const create = fields.map((f) => `${f.name}: ${SAMPLE[f.type].create},`);
-  const update = fields.map((f) => `${f.name}: ${SAMPLE[f.type].update},`);
-  const merge = fields.map(
-    (f) => `${f.name}: input.${f.name} === undefined ? row.${f.name} : input.${f.name},`,
-  );
+  const rendered = fields.map(fieldLines);
+  const create = rendered.map((f) => f.sampleCreate);
+  const update = rendered.map((f) => f.sampleUpdate);
+  const merge = rendered.map((f) => f.merge);
   const header = `import { randomUUID } from "node:crypto";
 import type { ${S}Repository } from "../../src/modules/${names.plural.kebab}/repository/types.ts";
 import type { ${S} } from "../../src/modules/${names.plural.kebab}/schema.ts";

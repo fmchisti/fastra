@@ -70,7 +70,7 @@ docs/providers.md      Provider details and how to add one
 <!-- @setup-endif -->
 <!-- @setup-if orm!=none -->
 - `src/db/`: Database interface (`types.ts`), `env.ts`, `index.ts` re-exporting the selected ORM, `<orm>/` client and schema. Migrations in `drizzle/` or `prisma/` (commit them; never edit an applied one). `src/lib/crud.ts`: repository types.
-- `scripts/gen-module.ts`: `pnpm gen:module`. `test/repositories/`: contract tests on in-process Postgres (PGlite) and ORM harnesses.
+- `scripts/gen-module.ts`, `scripts/gen-field.ts`: `pnpm gen:module`, `pnpm gen:field`. `test/repositories/`: contract tests on in-process Postgres (PGlite) and ORM harnesses.
 <!-- @setup-endif -->
 <!-- @setup-if orm=prisma -->
 - `src/generated/`: Prisma client (generated, gitignored). Never edit.
@@ -119,6 +119,7 @@ pnpm verify
 <!-- @setup-endif -->
 - Creates the module files, table, migration, fake, route tests, and repository contract tests, and registers the module at the `// @gen:` markers in `app.ts`, `container.ts`, `swagger.ts`, `test/helpers.ts`.
 - `--plural people` for irregular names, `--dry-run` to preview. It refuses to overwrite files.
+- **Add fields later** with `pnpm gen:field product --fields "sku:string? weight:float"`: it updates the schema (response, POST, PATCH), table, repository mapper, and test fake, and creates the migration. It writes nothing unless every file still has its insertion point; otherwise it lists the manual steps. A required field on a table with rows needs a `DEFAULT` in the migration.
 - Then customize: add validation to the schema, rules to the service, and extra query methods to the repository interface (plus fake and implementation).
 
 <!-- @setup-endif -->
