@@ -185,6 +185,8 @@ export const features = {
         scripts: {
           "db:generate": "drizzle-kit generate",
           "db:migrate": "drizzle-kit migrate",
+          // Same command for both ORMs: migration from the schema change, then apply it
+          "db:sync": "drizzle-kit generate && drizzle-kit migrate",
           // Production: runtime deps only (Docker image, Railway pre-deploy)
           "db:migrate:deploy": "node dist/db/drizzle/migrate.js",
           "db:push": "drizzle-kit push",
@@ -214,6 +216,7 @@ export const features = {
           postinstall: "prisma generate",
           "db:generate": "prisma generate",
           "db:migrate": "prisma migrate dev",
+          "db:sync": "prisma migrate dev",
           "db:migrate:deploy": "prisma migrate deploy",
           "db:push": "prisma db push",
           "db:studio": "prisma studio",
@@ -352,13 +355,14 @@ export const CONDITIONAL: ConditionalManifest[] = [
       "scripts/gen-field.ts",
       "scripts/gen",
       "scripts/seed.ts",
+      "docs/modules.md",
       "test/scripts/gen-module.test.ts",
       "test/scripts/gen-field.test.ts",
       "src/lib/crud.ts",
       "test/repositories/crud-contract.ts",
     ],
     // db:reset recreates the Docker volume, then migrates
-    scripts: ["gen:module", "gen:field", "db:reset", "db:seed"],
+    scripts: ["gen:module", "gen:field", "db:reset", "db:seed", "db:sync"],
     dependencies: ["pg"],
     devDependencies: ["@types/pg", "@electric-sql/pglite", "@electric-sql/pglite-socket"],
   },

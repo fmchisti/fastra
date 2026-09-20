@@ -105,8 +105,7 @@ Each feature lives in `src/modules/<feature>/`. Copy the closest existing module
 **CRUD resource stored in the database (most cases): generate, then edit.**
 
 ```bash
-pnpm gen:module product --fields "name:string price:decimal stock:int=0 status:enum(draft,published)=draft sku:string?!index description:text?"
-pnpm db:migrate
+pnpm gen:module product --fields "name:string price:decimal stock:int=0 status:enum(draft,published)=draft sku:string?!index description:text?" --migrate
 pnpm verify
 ```
 
@@ -117,6 +116,7 @@ pnpm verify
 <!-- @setup-if auth=none -->
 - This project has no auth, so generated resources are public (no `userId`). Add auth to the routes before exposing write access publicly.
 <!-- @setup-endif -->
+- `--migrate` applies the migration (needs the database: `pnpm db:up`); without it run `pnpm db:migrate`. `pnpm routes` lists the registered routes.
 - Creates the module files, table, migration, fake, route tests, and repository contract tests, and registers the module at the `// @gen:` markers in `app.ts`, `container.ts`, `swagger.ts`, `test/helpers.ts`.
 - `--plural people` for irregular names, `--dry-run` to preview. It refuses to overwrite files.
 - **Add fields later** with `pnpm gen:field product --fields "sku:string? weight:float"`: it updates the schema (response, POST, PATCH), table, repository mapper, and test fake, and creates the migration. It writes nothing unless every file still has its insertion point; otherwise it lists the manual steps. Give a required field a default (`weight:float=0`), or the migration fails on a table that has rows.
@@ -202,6 +202,7 @@ pnpm verify
 <!-- @setup-if orm=prisma -->
 - Schema: `prisma/schema/*.prisma`. After a change: `pnpm db:migrate` (creates the migration and regenerates the client).
 <!-- @setup-endif -->
+- After editing a schema by hand: `pnpm db:sync` (creates the migration and applies it, for either ORM).
 - Commit migrations. Never edit a migration that has been applied anywhere; add a new one.
 - Production applies migrations with `pnpm db:migrate:deploy`.
 - Development data goes in `scripts/seed.ts` (`pnpm db:seed`), created through repositories. `pnpm db:reset` deletes the local Docker volumes and migrates again.
@@ -256,6 +257,9 @@ pnpm verify
 ## More
 
 - [README.md](./README.md): setup, scripts, production, deployment
+<!-- @setup-if orm!=none -->
+- [docs/modules.md](./docs/modules.md): recipes: add fields, validation, business rules, custom queries, relations
+<!-- @setup-endif -->
 - [docs/providers.md](./docs/providers.md): auth, ORM, storage, Redis, and adding a provider
 <!-- @setup-template-only -->
 - [docs/template.md](./docs/template.md): maintaining Fastra itself (setup CLI, directives, verify matrix)

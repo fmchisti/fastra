@@ -109,6 +109,8 @@ const verify = async (selection: Selection): Promise<Result> => {
       );
     }
     await exec("pnpm", ["exec", "tsc", "--noEmit"], { cwd: dir, timeout: 300_000 });
+    // `pnpm routes` builds the app with the test fakes: it must work for every selection
+    await exec("pnpm", ["exec", "tsx", "scripts/routes.ts"], { cwd: dir, timeout: 120_000 });
     // Generated projects must also be lint- and format-clean (no leftovers from directives)
     await exec("pnpm", ["exec", "biome", "check", "--error-on-warnings", "."], { cwd: dir });
     if (!values["no-tests"]) await exec("pnpm", ["exec", "vitest", "run"], { cwd: dir, timeout: 300_000 });

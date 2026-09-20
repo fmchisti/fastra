@@ -13,19 +13,27 @@ import {
 } from "./gen/edit.ts";
 import { FIELD_SYNTAX, type Field, type ModuleNames, parseFields, parseModuleName } from "./gen/model.ts";
 import { fieldLines } from "./gen/templates.ts";
-import { createMigration, detectOrm, type Orm, run, snapshotPrismaSchema } from "./gen-module.ts";
+import {
+  applyMigrations,
+  createMigration,
+  detectOrm,
+  type Orm,
+  run,
+  snapshotPrismaSchema,
+} from "./gen-module.ts";
 
 const HELP = `
 Add fields to a module created with gen:module: schema, table, repository, test fake, and a migration.
 
 Usage:
-  pnpm gen:field <module> --fields "<field:type[?]> ..." [--plural <name>] [--dry-run]
+  pnpm gen:field <module> --fields "<field:type[?]> ..." [--plural <name>] [--migrate] [--dry-run]
 
 Example:
   pnpm gen:field product --fields "sku:string? weight:float"
 
 ${FIELD_SYNTAX}
 
+--migrate also applies the migration (the database must be running).
 Nothing is written unless every file can be updated.
 A required field (no ?) on a table that already has rows needs a default: edit the migration first.
 `;
@@ -214,6 +222,8 @@ export interface AddFieldsOptions {
   dryRun?: boolean;
   /** Skip migration and formatting (unit tests). */
   skipTooling?: boolean;
+  /** Apply the new migration to the database right away. */
+  migrate?: boolean;
 }
 
 export const addFields = async (options: AddFieldsOptions): Promise<string[]> => {
@@ -240,6 +250,7 @@ export const addFields = async (options: AddFieldsOptions): Promise<string[]> =>
     await createMigration(root, migration, orm, previousPrismaSchema);
     if (previousPrismaSchema) await rm(path.dirname(previousPrismaSchema), { recursive: true, force: true });
     await run("pnpm", ["exec", "biome", "check", "--write", "."], root);
+    if (options.migrate) await applyMigrations(root, orm);
   }
   return writes.map((file) => file.path);
 };
@@ -251,6 +262,7 @@ const main = async () => {
       fields: { type: "string" },
       plural: { type: "string" },
       "dry-run": { type: "boolean", default: false },
+      migrate: { type: "boolean", default: false },
       help: { type: "boolean", default: false },
     },
   });
@@ -269,6 +281,7 @@ const main = async () => {
     fields,
     plural: values.plural,
     dryRun: values["dry-run"],
+    migrate: values.migrate,
   });
   console.log(
     `${values["dry-run"] ? "Would update" : "Updated"}:\n${updated.map((file) => `  ${file}`).join("\n")}`,
@@ -282,8 +295,7 @@ ${required.map((f) => f.name).join(", ")}: required. If the table already has ro
 in the new migration before applying it, or the migration fails. Next time: ${required[0]?.name}:${required[0]?.type}=<default>`);
   }
   console.log(`
-Migration created. Next:
-  pnpm db:migrate
+Migration ${values.migrate ? "created and applied" : "created"}. Next:${values.migrate ? "" : "\n  pnpm db:migrate"}
   pnpm verify`);
 };
 

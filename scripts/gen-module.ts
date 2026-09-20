@@ -13,12 +13,13 @@ const HELP = `
 Scaffold a CRUD module (routes, schema, service, repository, table, migration, tests).
 
 Usage:
-  pnpm gen:module <name> --fields "<field:type[?]> ..." [--plural <name>] [--public] [--dry-run]
+  pnpm gen:module <name> --fields "<field:type[?]> ..." [--plural <name>] [--public] [--migrate] [--dry-run]
 
 Example:
   pnpm gen:module product --fields "name:string price:float stock:int description:text? releasedAt:datetime?"
 
 ${FIELD_SYNTAX}
+--migrate also applies the migration (the database must be running).
 Adds: id, createdAt, updatedAt, and userId when the project has auth (records are scoped to their owner
 and routes require sign-in). --public, or a project without auth, creates a public resource instead.
 Routes: /api/<plural> (GET, POST, GET/:id, PATCH/:id, DELETE/:id).
@@ -167,6 +168,19 @@ export const run = async (command: string, args: string[], cwd: string) => {
   });
 };
 
+/** `--migrate`: apply pending migrations to the database in DATABASE_URL (.env is read by the ORM config). */
+export const applyMigrations = async (root: string, orm: Orm) => {
+  const args =
+    orm === "drizzle" ? ["exec", "drizzle-kit", "migrate"] : ["exec", "prisma", "migrate", "deploy"];
+  await exec("pnpm", args, { cwd: root, timeout: 120_000 }).catch((error: unknown) => {
+    const output =
+      error && typeof error === "object" && "stderr" in error ? String(error.stderr).trim() : String(error);
+    throw new Error(
+      `The migration was created but not applied. Is the database running (pnpm db:up) and DATABASE_URL set?\nThen run: pnpm db:migrate\n${output}`,
+    );
+  });
+};
+
 /** Prisma migrations are diffed against the schema as it was before the change: copy it aside first. */
 export const snapshotPrismaSchema = async (root: string): Promise<string> => {
   const snapshot = path.join(await mkdtemp(path.join(tmpdir(), "prisma-schema-")), "schema");
@@ -219,6 +233,8 @@ export interface GenerateOptions {
   public?: boolean;
   /** Skip migration and formatting (unit tests). */
   skipTooling?: boolean;
+  /** Apply the new migration to the database right away. */
+  migrate?: boolean;
 }
 
 export const generateModule = async (options: GenerateOptions): Promise<string[]> => {
@@ -253,6 +269,7 @@ export const generateModule = async (options: GenerateOptions): Promise<string[]
     await createMigration(root, `add_${names.plural.snake}`, orm, previousPrismaSchema);
     if (previousPrismaSchema) await rm(path.dirname(previousPrismaSchema), { recursive: true, force: true });
     await run("pnpm", ["exec", "biome", "check", "--write", "."], root);
+    if (options.migrate) await applyMigrations(root, orm);
   }
   return files.map((file) => file.path);
 };
@@ -265,6 +282,7 @@ const main = async () => {
       plural: { type: "string" },
       "dry-run": { type: "boolean", default: false },
       public: { type: "boolean", default: false },
+      migrate: { type: "boolean", default: false },
       help: { type: "boolean", default: false },
     },
   });
@@ -281,6 +299,7 @@ const main = async () => {
     plural: values.plural,
     dryRun: values["dry-run"],
     public: values.public,
+    migrate: values.migrate,
   });
 
   const names = parseModuleName(name, values.plural);
@@ -290,8 +309,7 @@ const main = async () => {
   if (!values["dry-run"]) {
     console.log(`
 Registered in src/app.ts, src/container.ts, src/config/swagger.ts, test/helpers.ts.
-Migration created. Next:
-  pnpm db:migrate
+Migration ${values.migrate ? "created and applied" : "created"}. Next:${values.migrate ? "" : "\n  pnpm db:migrate"}
   pnpm verify
 Routes: /api/${names.plural.kebab}`);
   }
