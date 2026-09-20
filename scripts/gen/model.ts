@@ -86,6 +86,14 @@ export const toForms = (words: string[]): NameForms => {
   };
 };
 
+/** Name forms for something that has no plural, like an external API client: "open-weather". */
+export const parseName = (input: string): NameForms => {
+  if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(input)) {
+    throw new Error(`Invalid name "${input}": use letters, numbers, - or _ (e.g. weather, open-weather)`);
+  }
+  return toForms(splitWords(input));
+};
+
 export const pluralize = (word: string): string => {
   if (/[^aeiou]y$/.test(word)) return `${word.slice(0, -1)}ies`;
   if (/(s|x|z|ch|sh)$/.test(word)) return `${word}es`;

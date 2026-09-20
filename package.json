@@ -35,6 +35,7 @@
     "gen:module": "tsx scripts/gen-module.ts",
     "gen:field": "tsx scripts/gen-field.ts",
     "gen:remove": "tsx scripts/gen-remove.ts",
+    "gen:client": "tsx scripts/gen-client.ts",
     "env:init": "tsx scripts/init-env.ts",
     "hooks:install": "tsx scripts/install-hooks.ts",
     "build:create": "tsc -p packages/create-fastra/tsconfig.json",

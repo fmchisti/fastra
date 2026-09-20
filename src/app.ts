@@ -126,9 +126,7 @@ export const buildApp = async (
   // @setup-if auth!=none&orm!=none
   await app.register(todoRoutes, { prefix: "/api", repository: deps.todos });
   // @setup-endif
-  // @setup-if orm!=none
   // @gen:routes
-  // @setup-endif
   // @setup-if storage=s3,local
   await app.register(fileRoutes, { prefix: "/api", storage: deps.storage });
   // @setup-endif

@@ -125,6 +125,11 @@ const verify = async (selection: Selection): Promise<Result> => {
         throw new Error(`gen:remove left the module behind:\n${leftovers}`);
       }
     }
+    // gen:client needs no database: its module must compile and pass its tests for every selection
+    await exec("pnpm", ["exec", "tsx", "scripts/gen-client.ts", "open-weather"], {
+      cwd: dir,
+      timeout: 300_000,
+    });
     await exec("pnpm", ["exec", "tsc", "--noEmit"], { cwd: dir, timeout: 300_000 });
     // `pnpm routes` builds the app with the test fakes: it must work for every selection
     await exec("pnpm", ["exec", "tsx", "scripts/routes.ts"], { cwd: dir, timeout: 120_000 });

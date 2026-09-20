@@ -88,7 +88,11 @@ The generator does not create relations. For `product.categoryId`:
 
 ## A module that calls an external API
 
-See "Feature that calls an external API" in [AGENTS.md](../AGENTS.md#adding-a-module): a typed `client.ts` with an injected `fetch`, validated responses, and a fake client in tests.
+```bash
+pnpm gen:client weather
+```
+
+Creates `src/modules/weather/` with a typed `client.ts` (injected `fetch`, responses validated with Zod, upstream failures become 502, 10 s timeout), service, handler, route with its own rate limit, a fake client, and tests for the route and the client that never touch the network. Then replace the example call (`GET /items/:id`) and `WeatherItemSchema` with the real API, and map the upstream shape to your own in `service.ts`. Rules: "Feature that calls an external API" in [AGENTS.md](../AGENTS.md#adding-a-module).
 
 ## Seed and reset
 

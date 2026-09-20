@@ -19,9 +19,7 @@ export const createTestDependencies = (overrides: Partial<AppDependencies> = {})
   // @setup-if auth!=none&orm!=none
   todos: createMemoryTodoRepository(),
   // @setup-endif
-  // @setup-if orm!=none
   // @gen:fakes
-  // @setup-endif
   // @setup-if storage=s3,local
   storage: createMemoryStorage(),
   // @setup-endif

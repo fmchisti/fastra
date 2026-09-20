@@ -125,7 +125,15 @@ pnpm verify
 - Then customize: add validation to the schema, rules to the service, and extra query methods to the repository interface (plus fake and implementation).
 
 <!-- @setup-endif -->
-**Feature that calls an external API:**
+**Feature that calls an external API: generate, then edit.**
+
+```bash
+pnpm gen:client weather   # GET /api/weather/:id, WEATHER_API_URL, WEATHER_API_KEY
+pnpm verify
+```
+
+It creates every file below with one example call, registers them at the `// @gen:` markers, and adds the env variables to `.env.example` (and `.env`). Replace the example call and schemas with the real API. What it generates, and the rules for extending it:
+
 
 1. Write `client.ts`: a factory like `createWeatherClient({ baseUrl, apiKey, fetch = globalThis.fetch })` whose methods call the API and parse responses with Zod. Validate its env with `loadEnv` and add the variables to `.env.example`.
 2. Add the client to `AppDependencies` and `createDependencies` in `src/container.ts`.
@@ -233,18 +241,9 @@ pnpm verify
 - Each test creates its own data; tests do not depend on order. Mocks are restored automatically (`restoreMocks`).
 - Test through the HTTP API where possible, and assert error bodies, not just status codes.
 
-<!-- @setup-if orm!=none -->
 ## Markers in source
-<!-- @setup-endif -->
-<!-- @setup-if orm=none -->
-<!-- @setup-template-only -->
-## Markers in source
-<!-- @setup-endif -->
-<!-- @setup-endif -->
 
-<!-- @setup-if orm!=none -->
-- `// @gen:dependencies`, `// @gen:factories`, `// @gen:routes`, `// @gen:tags`, `// @gen:fakes`: insertion points for `pnpm gen:module`. **Do not remove or move them.**
-<!-- @setup-endif -->
+- `// @gen:dependencies`, `// @gen:factories`, `// @gen:routes`, `// @gen:tags`, `// @gen:fakes`: insertion points for the `pnpm gen:*` generators. **Do not remove or move them.**
 <!-- @setup-template-only -->
 - `@setup-select`, `@setup-if`, `@setup-template-only` (template only): resolved and removed by `pnpm setup:project`. Read [docs/template.md](./docs/template.md) before editing them.
 <!-- @setup-endif -->
