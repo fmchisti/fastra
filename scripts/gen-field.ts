@@ -2,8 +2,16 @@ import { existsSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { AnchorError, addNamedImports, type BlockInsert, blockHasKey, insertInBlock } from "./gen/edit.ts";
-import { type Field, type ModuleNames, parseFields, parseModuleName } from "./gen/model.ts";
+import {
+  AnchorError,
+  addNamedImports,
+  type BlockInsert,
+  blockHasKey,
+  insertAfterMatch,
+  insertBeforeLine,
+  insertInBlock,
+} from "./gen/edit.ts";
+import { FIELD_SYNTAX, type Field, type ModuleNames, parseFields, parseModuleName } from "./gen/model.ts";
 import { fieldLines } from "./gen/templates.ts";
 import { createMigration, detectOrm, type Orm, run, snapshotPrismaSchema } from "./gen-module.ts";
 
@@ -16,7 +24,9 @@ Usage:
 Example:
   pnpm gen:field product --fields "sku:string? weight:float"
 
-Types and ? work as in gen:module. Nothing is written unless every file can be updated.
+${FIELD_SYNTAX}
+
+Nothing is written unless every file can be updated.
 A required field (no ?) on a table that already has rows needs a default: edit the migration first.
 `;
 
@@ -37,7 +47,7 @@ export const planFieldEdits = async (
 ): Promise<FileWrite[]> => {
   const { singular, plural } = names;
   const S = singular.pascal;
-  const rendered = fields.map(fieldLines);
+  const rendered = fields.map((f) => fieldLines(f, names));
   const moduleDir = `src/modules/${plural.kebab}`;
   if (!existsSync(path.join(root, moduleDir, "schema.ts"))) {
     throw new Error(`No module at ${moduleDir}. Create it with: pnpm gen:module ${singular.kebab}`);
@@ -47,7 +57,17 @@ export const planFieldEdits = async (
     start: new RegExp(`^export const ${S}Schema = z\\.object\\(\\{`),
     before: /^\s*createdAt:/,
   };
-  const edits: { file: string; inserts: BlockInsert[]; imports?: { source: string; names: string[] } }[] = [
+  const tableStart = new RegExp(`^export const ${plural.camel} = pgTable\\(`);
+  const drizzleIndexes = rendered.flatMap((f) => f.drizzleIndex ?? []);
+  const prismaIndexes = rendered.flatMap((f) => f.prismaIndex ?? []);
+
+  interface FileEdit {
+    file: string;
+    inserts: BlockInsert[];
+    /** Whole-file changes applied after the block inserts */
+    finish?: (content: string) => string;
+  }
+  const edits: FileEdit[] = [
     {
       file: `${moduleDir}/schema.ts`,
       inserts: [
@@ -72,7 +92,7 @@ export const planFieldEdits = async (
         {
           start: new RegExp(`^const to${S} = \\(`),
           before: /^\s*createdAt:/,
-          lines: rendered.map((f) => f.mapper),
+          lines: rendered.map((f) => f.mapper[orm]),
           indent: "same",
         },
       ],
@@ -82,13 +102,24 @@ export const planFieldEdits = async (
           file: `src/db/drizzle/schema/${plural.kebab}.ts`,
           inserts: [
             {
-              start: new RegExp(`^export const ${plural.camel} = pgTable\\(`),
+              start: tableStart,
               before: /^\s*createdAt:/,
               lines: rendered.map((f) => f.drizzleColumn),
               indent: "same",
             },
           ],
-          imports: { source: "drizzle-orm/pg-core", names: rendered.map((f) => f.drizzleBuilder) },
+          finish: (content) => {
+            const file = `src/db/drizzle/schema/${plural.kebab}.ts`;
+            const builders = rendered.map((f) => f.drizzleBuilder);
+            let next = addNamedImports(content, "drizzle-orm/pg-core", builders, file);
+            const enums = rendered.flatMap((f) => f.drizzleDeclaration ?? []);
+            if (enums.length > 0) next = insertBeforeLine(next, tableStart, enums, file);
+            if (drizzleIndexes.length > 0) {
+              // The index list: `(table) => [index(...)...]`, on one line or several
+              next = insertAfterMatch(next, /\(table\) => \[/, `${drizzleIndexes.join(", ")}, `, file);
+            }
+            return next;
+          },
         }
       : {
           file: `prisma/schema/${plural.kebab}.prisma`,
@@ -99,7 +130,22 @@ export const planFieldEdits = async (
               lines: rendered.map((f) => f.prismaField),
               indent: "same",
             },
+            ...(prismaIndexes.length > 0
+              ? [
+                  {
+                    start: new RegExp(`^model ${S} \\{`),
+                    before: /^\s*@@map\(/,
+                    lines: prismaIndexes,
+                    indent: "same",
+                  } satisfies BlockInsert,
+                ]
+              : []),
           ],
+          // Enum blocks go after the model
+          finish: (content) =>
+            [content.trimEnd(), ...rendered.flatMap((f) => f.prismaDeclaration ?? [])]
+              .join("\n\n")
+              .concat("\n"),
         },
     {
       file: `test/fakes/${plural.kebab}.ts`,
@@ -127,7 +173,7 @@ export const planFieldEdits = async (
   ];
 
   const writes: FileWrite[] = [];
-  for (const { file, inserts, imports } of edits) {
+  for (const { file, inserts, finish } of edits) {
     const filePath = path.join(root, file);
     if (!existsSync(filePath)) throw new AnchorError(`${file}: file not found`);
     let content = await readFile(filePath, "utf8");
@@ -139,7 +185,7 @@ export const planFieldEdits = async (
       }
     }
     for (const insert of inserts) content = insertInBlock(content, insert, file);
-    if (imports) content = addNamedImports(content, imports.source, imports.names, file);
+    if (finish) content = finish(content);
     writes.push({ path: file, content });
   }
   return writes;
@@ -229,11 +275,11 @@ const main = async () => {
   );
   if (values["dry-run"]) return;
 
-  const required = parseFields(fields).filter((f) => !f.optional);
+  const required = parseFields(fields).filter((f) => !f.optional && f.default === undefined);
   if (required.length > 0) {
     console.log(`
 ${required.map((f) => f.name).join(", ")}: required. If the table already has rows, give the column a DEFAULT
-in the new migration before applying it, or the migration fails.`);
+in the new migration before applying it, or the migration fails. Next time: ${required[0]?.name}:${required[0]?.type}=<default>`);
   }
   console.log(`
 Migration created. Next:

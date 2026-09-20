@@ -153,10 +153,10 @@ pnpm dev
 - Current user: `GET /api/me`
 <!-- @setup-endif -->
 <!-- @setup-if auth!=none&orm!=none -->
-- Example CRUD: `/api/todos`. Create your own with `pnpm gen:module product --fields "name:string price:float"`
+- Example CRUD: `/api/todos`. Create your own with `pnpm gen:module product --fields "name:string price:decimal status:enum(draft,published)=draft"`
 <!-- @setup-endif -->
 <!-- @setup-if auth=none&orm!=none -->
-- Example CRUD: `/api/notes` (public). Create your own with `pnpm gen:module product --fields "name:string price:float"`
+- Example CRUD: `/api/notes` (public). Create your own with `pnpm gen:module product --fields "name:string price:decimal status:enum(draft,published)=draft"`
 <!-- @setup-endif -->
 <!-- @setup-if orm=none -->
 - Add routes in `src/modules/<name>/` (see [AGENTS.md](./AGENTS.md)). Call external APIs from a service with `fetch`.

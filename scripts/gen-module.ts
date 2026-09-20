@@ -4,7 +4,7 @@ import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseArgs, promisify } from "node:util";
-import { type Field, type ModuleNames, parseFields, parseModuleName } from "./gen/model.ts";
+import { FIELD_SYNTAX, type Field, type ModuleNames, parseFields, parseModuleName } from "./gen/model.ts";
 import * as t from "./gen/templates.ts";
 
 const exec = promisify(execFile);
@@ -18,7 +18,7 @@ Usage:
 Example:
   pnpm gen:module product --fields "name:string price:float stock:int description:text? releasedAt:datetime?"
 
-Types: string (≤255), text, int, float, boolean, datetime. Add ? for optional (nullable).
+${FIELD_SYNTAX}
 Adds: id, createdAt, updatedAt, and userId when the project has auth (records are scoped to their owner
 and routes require sign-in). --public, or a project without auth, creates a public resource instead.
 Routes: /api/<plural> (GET, POST, GET/:id, PATCH/:id, DELETE/:id).
