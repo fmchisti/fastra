@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   allowBuildsFor,
   allowedOptions,
+  dependenciesWithStalePeers,
   incompatibility,
   pathsToRemove,
   processDirectives,
@@ -479,6 +480,53 @@ describe("real features manifest", () => {
         }
       }
     }
+  });
+});
+
+describe("dependenciesWithStalePeers", () => {
+  const lockfile = [
+    "lockfileVersion: '9.0'",
+    "",
+    "importers:",
+    "",
+    "  .:",
+    "    dependencies:",
+    "      '@scope/web':",
+    "        specifier: ^1.0.0",
+    "        version: 1.0.0(@prisma/client@7.10.0(prisma@7.10.0))",
+    "  apps/api:",
+    "    dependencies:",
+    "      better-auth:",
+    "        specifier: ^1.7.4",
+    "        version: 1.7.5(@prisma/client@7.10.0(prisma@7.10.0(typescript@5.9.3)))(pg@8.23.0)",
+    "      pg:",
+    "        specifier: ^8.23.0",
+    "        version: 8.23.0",
+    "    devDependencies:",
+    "      drizzle-kit:",
+    "        specifier: ^0.31.10",
+    "        version: 0.31.10(prisma@7.10.0)",
+    "",
+    "packages:",
+    "",
+    "  pg@8.23.0:",
+    "    resolution: {integrity: sha512-x}",
+    "",
+  ].join("\n");
+
+  it("finds the importer's dependencies resolved against a removed package", () => {
+    expect(dependenciesWithStalePeers(lockfile, "apps/api", ["@prisma/client", "prisma"])).toEqual([
+      "better-auth",
+      "drizzle-kit",
+    ]);
+    expect(dependenciesWithStalePeers(lockfile, ".", ["prisma"])).toEqual(["@scope/web"]);
+  });
+
+  it("returns nothing for other importers, unrelated removals, or a lockfile without the importer", () => {
+    expect(dependenciesWithStalePeers(lockfile, "apps/api", ["firebase-admin"])).toEqual([]);
+    expect(dependenciesWithStalePeers(lockfile, "apps/other", ["prisma"])).toEqual([]);
+    // A package name that only shares a prefix is not a match
+    expect(dependenciesWithStalePeers(lockfile, "apps/api", ["pris"])).toEqual([]);
   });
 });
 

@@ -449,7 +449,39 @@ export const toWorkspaceDockerignore = (dockerignore: string): string =>
 export interface ApplyResult {
   removed: string[];
   updatedFiles: string[];
+  /** Packages setup deleted from package.json (dependencies and devDependencies). */
+  removedDependencies: string[];
 }
+
+/**
+ * Direct dependencies of `importerId` (`.`, or `apps/api` in a workspace) that pnpm-lock.yaml still
+ * resolves against a `removed` package as an optional peer, e.g. `drizzle-orm` against `@prisma/client`.
+ * pnpm keeps such resolutions for as long as the dependency itself stays locked, so removing Prisma
+ * from package.json would leave it, and its engines, installed.
+ */
+export const dependenciesWithStalePeers = (
+  lockfile: string,
+  importerId: string,
+  removed: string[],
+): string[] => {
+  const lines = lockfile.split(/\r?\n/);
+  const unquote = (value: string) => value.replace(/^(['"])(.*)\1$/, "$2");
+  const start = lines.findIndex(
+    (line) => /^ {2}\S.*:$/.test(line) && unquote(line.trim().slice(0, -1)) === importerId,
+  );
+  if (start === -1 || !lines.slice(0, start).includes("importers:")) return [];
+
+  const stale = new Set<string>();
+  let dependency = "";
+  for (const line of lines.slice(start + 1)) {
+    if (/^ {0,2}\S/.test(line)) break;
+    const name = /^ {6}(\S.*):$/.exec(line)?.[1];
+    if (name !== undefined) dependency = unquote(name);
+    const version = /^ {8}version: (.+)$/.exec(line)?.[1] ?? "";
+    if (removed.some((pkg) => version.includes(`(${pkg}@`))) stale.add(dependency);
+  }
+  return [...stale];
+};
 
 export const applySelection = async (
   rootDir: string,
@@ -487,7 +519,10 @@ export const applySelection = async (
   // 3. package.json and .env.example
   const pkgPath = path.join(root, "package.json");
   const pkg = JSON.parse(await readFile(pkgPath, "utf8")) as PackageJson;
-  await writeFile(pkgPath, `${JSON.stringify(updatePackageJson(pkg, selection, options), null, 2)}\n`);
+  const nextPkg = updatePackageJson(pkg, selection, options);
+  await writeFile(pkgPath, `${JSON.stringify(nextPkg, null, 2)}\n`);
+  const namesOf = (json: PackageJson) => Object.keys({ ...json.dependencies, ...json.devDependencies });
+  const removedDependencies = namesOf(pkg).filter((name) => !namesOf(nextPkg).includes(name));
   await writeFile(path.join(root, ".env.example"), renderEnvExample(selection));
   // Missing when the project lives in a monorepo: the workspace root owns pnpm settings
   const workspacePath = path.join(root, "pnpm-workspace.yaml");
@@ -527,7 +562,7 @@ export const applySelection = async (
     await writeFile(readmePath, renameReadme(await readFile(readmePath, "utf8"), options.projectName));
   }
 
-  return { removed, updatedFiles };
+  return { removed, updatedFiles, removedDependencies };
 };
 
 export const describeSelection = (selection: Selection): string[] =>
