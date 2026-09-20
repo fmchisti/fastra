@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { cp, mkdtemp, rm, symlink } from "node:fs/promises";
 import { availableParallelism, tmpdir } from "node:os";
 import path from "node:path";
@@ -107,6 +108,22 @@ const verify = async (selection: Selection): Promise<Result> => {
         ],
         { cwd: dir, timeout: 300_000 },
       );
+    }
+    if (selection.orm !== "none") {
+      // ...and gen:remove must undo a module completely: leftovers fail the type-check below
+      for (const args of [
+        ["scripts/gen-module.ts", "temporary-thing", "--fields", "label:string kind:enum(a,b)"],
+        ["scripts/gen-remove.ts", "temporary-thing", "--yes"],
+      ]) {
+        await exec("pnpm", ["exec", "tsx", ...args], { cwd: dir, timeout: 300_000 });
+      }
+      const leftovers = await exec("grep", ["-rliE", "temporary.?thing", "src", "test"], { cwd: dir }).then(
+        ({ stdout }) => stdout.trim(),
+        () => "", // grep exits 1 when nothing matches
+      );
+      if (leftovers || existsSync(path.join(dir, "prisma/schema/temporary-things.prisma"))) {
+        throw new Error(`gen:remove left the module behind:\n${leftovers}`);
+      }
     }
     await exec("pnpm", ["exec", "tsc", "--noEmit"], { cwd: dir, timeout: 300_000 });
     // `pnpm routes` builds the app with the test fakes: it must work for every selection

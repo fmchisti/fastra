@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseArgs, promisify } from "node:util";
 import { FIELD_SYNTAX, type Field, type ModuleNames, parseFields, parseModuleName } from "./gen/model.ts";
+import { canPrompt, intro, note, promptConfirm, promptFields, promptModuleName } from "./gen/prompt.ts";
 import * as t from "./gen/templates.ts";
 
 const exec = promisify(execFile);
@@ -13,6 +14,7 @@ const HELP = `
 Scaffold a CRUD module (routes, schema, service, repository, table, migration, tests).
 
 Usage:
+  pnpm gen:module                 asks for the name and fields
   pnpm gen:module <name> --fields "<field:type[?]> ..." [--plural <name>] [--public] [--migrate] [--dry-run]
 
 Example:
@@ -286,20 +288,39 @@ const main = async () => {
       help: { type: "boolean", default: false },
     },
   });
-  const [name] = positionals;
-  if (values.help || !name) {
+  let [name] = positionals;
+  let { fields, migrate } = values;
+  let isPublic = values.public;
+  if (values.help || (!name && !canPrompt())) {
     console.log(HELP);
-    process.exit(name ? 0 : 1);
+    process.exit(values.help ? 0 : 1);
+  }
+
+  // No name in a terminal: ask, then show the command so it can be repeated or scripted
+  if (!name) {
+    intro("New CRUD module");
+    name = await promptModuleName();
+    fields = await promptFields();
+    const hasAuth = existsSync(path.join(process.cwd(), "src/auth/index.ts"));
+    if (hasAuth) {
+      isPublic = !(await promptConfirm("Records belong to the signed-in user (routes require auth)?"));
+    }
+    migrate = await promptConfirm("Apply the migration now (the database must be running)?", false);
+    note(
+      `pnpm gen:module ${name} --fields "${fields}"${isPublic ? " --public" : ""}${migrate ? " --migrate" : ""}`,
+      "Same as",
+    );
+    if (!(await promptConfirm("Create it?"))) process.exit(0);
   }
 
   const created = await generateModule({
     root: process.cwd(),
     name,
-    fields: values.fields,
+    fields,
     plural: values.plural,
     dryRun: values["dry-run"],
-    public: values.public,
-    migrate: values.migrate,
+    public: isPublic,
+    migrate,
   });
 
   const names = parseModuleName(name, values.plural);
@@ -309,7 +330,7 @@ const main = async () => {
   if (!values["dry-run"]) {
     console.log(`
 Registered in src/app.ts, src/container.ts, src/config/swagger.ts, test/helpers.ts.
-Migration ${values.migrate ? "created and applied" : "created"}. Next:${values.migrate ? "" : "\n  pnpm db:migrate"}
+Migration ${migrate ? "created and applied" : "created"}. Next:${migrate ? "" : "\n  pnpm db:migrate"}
   pnpm verify
 Routes: /api/${names.plural.kebab}`);
   }

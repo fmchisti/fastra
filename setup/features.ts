@@ -353,18 +353,21 @@ export const CONDITIONAL: ConditionalManifest[] = [
       "test/postgres.ts",
       "scripts/gen-module.ts",
       "scripts/gen-field.ts",
+      "scripts/gen-remove.ts",
       "scripts/gen",
       "scripts/seed.ts",
       "docs/modules.md",
       "test/scripts/gen-module.test.ts",
       "test/scripts/gen-field.test.ts",
+      "test/scripts/gen-remove.test.ts",
       "src/lib/crud.ts",
       "test/repositories/crud-contract.ts",
     ],
     // db:reset recreates the Docker volume, then migrates
-    scripts: ["gen:module", "gen:field", "db:reset", "db:seed", "db:sync"],
+    scripts: ["gen:module", "gen:field", "gen:remove", "db:reset", "db:seed", "db:sync"],
     dependencies: ["pg"],
-    devDependencies: ["@types/pg", "@electric-sql/pglite", "@electric-sql/pglite-socket"],
+    // @clack/prompts: interactive gen:module, gen:field, and gen:remove (setup uses it too)
+    devDependencies: ["@types/pg", "@electric-sql/pglite", "@electric-sql/pglite-socket", "@clack/prompts"],
   },
   {
     // The todos example is user-owned data: it needs both auth and a database

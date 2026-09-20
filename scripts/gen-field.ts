@@ -12,6 +12,7 @@ import {
   insertInBlock,
 } from "./gen/edit.ts";
 import { FIELD_SYNTAX, type Field, type ModuleNames, parseFields, parseModuleName } from "./gen/model.ts";
+import { canPrompt, intro, note, promptConfirm, promptFields } from "./gen/prompt.ts";
 import { fieldLines } from "./gen/templates.ts";
 import {
   applyMigrations,
@@ -26,6 +27,7 @@ const HELP = `
 Add fields to a module created with gen:module: schema, table, repository, test fake, and a migration.
 
 Usage:
+  pnpm gen:field <module>         asks for the fields
   pnpm gen:field <module> --fields "<field:type[?]> ..." [--plural <name>] [--migrate] [--dry-run]
 
 Example:
@@ -269,9 +271,17 @@ const main = async () => {
   // Fields may also follow the module name, but quote them: zsh expands an unquoted `?`
   const [module, ...specs] = positionals;
   if (values.fields) specs.push(values.fields);
-  if (values.help || !module || specs.length === 0) {
+  if (values.help || !module || (specs.length === 0 && !canPrompt())) {
     console.log(HELP);
     process.exit(values.help ? 0 : 1);
+  }
+  let migrate = values.migrate;
+  // No fields in a terminal: ask, then show the command so it can be repeated or scripted
+  if (specs.length === 0) {
+    intro(`New fields for ${module}`);
+    specs.push(await promptFields());
+    migrate = await promptConfirm("Apply the migration now (the database must be running)?", false);
+    note(`pnpm gen:field ${module} --fields "${specs[0]}"${migrate ? " --migrate" : ""}`, "Same as");
   }
 
   const fields = specs.join(" ");
@@ -281,7 +291,7 @@ const main = async () => {
     fields,
     plural: values.plural,
     dryRun: values["dry-run"],
-    migrate: values.migrate,
+    migrate,
   });
   console.log(
     `${values["dry-run"] ? "Would update" : "Updated"}:\n${updated.map((file) => `  ${file}`).join("\n")}`,
@@ -295,7 +305,7 @@ ${required.map((f) => f.name).join(", ")}: required. If the table already has ro
 in the new migration before applying it, or the migration fails. Next time: ${required[0]?.name}:${required[0]?.type}=<default>`);
   }
   console.log(`
-Migration ${values.migrate ? "created and applied" : "created"}. Next:${values.migrate ? "" : "\n  pnpm db:migrate"}
+Migration ${migrate ? "created and applied" : "created"}. Next:${migrate ? "" : "\n  pnpm db:migrate"}
   pnpm verify`);
 };
 

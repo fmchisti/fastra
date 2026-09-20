@@ -294,6 +294,9 @@ export const updatePackageJson = (
   conditional: ConditionalManifest[] = CONDITIONAL,
 ): PackageJson => {
   const dropped = droppedConditionals(selection, manifest, conditional);
+  const keptDev = conditional
+    .filter((entry) => !dropped.includes(entry))
+    .flatMap((entry) => entry.devDependencies ?? []);
   const selected = Object.entries(manifest).map(
     ([feature, entry]) => entry.options[selection[feature] ?? ""],
   );
@@ -343,8 +346,11 @@ export const updatePackageJson = (
       dropped.flatMap((entry) => entry.dependencies ?? []),
     ),
     devDependencies: filterDeps("devDependencies", [
-      ...(options.removeSetup ? SETUP_DEV_DEPENDENCIES : []),
-      ...dropped.flatMap((entry) => entry.devDependencies ?? []),
+      // A setup dependency stays when something kept needs it too (the generators' prompts)
+      ...(options.removeSetup ? SETUP_DEV_DEPENDENCIES.filter((name) => !keptDev.includes(name)) : []),
+      ...dropped
+        .flatMap((entry) => entry.devDependencies ?? [])
+        .filter((name) => options.removeSetup || !SETUP_DEV_DEPENDENCIES.includes(name)),
     ]),
   };
 };
