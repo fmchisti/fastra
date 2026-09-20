@@ -64,7 +64,9 @@ CI runs the matrix (`setup-matrix` job) and a Docker smoke test for a Drizzle an
 
 pnpm only runs dependency install scripts listed in `allowBuilds` in `pnpm-workspace.yaml` (`true` runs, `false` skips). pnpm 11 fails the install on unlisted ones and no longer reads the `pnpm` field in `package.json`. pnpm 10.28 is the first release that reads `allowBuilds`.
 
-- Each option lists its own in `setup/features.ts` (`allowBuilds`), and `CORE_ALLOW_BUILDS` covers dependencies every project has.
+- Each option lists its own in `setup/features.ts` (`allowBuilds`), and `CORE_ALLOW_BUILDS` covers dependencies every project has. When options disagree, `true` wins.
+- List packages that arrive as peers too: `drizzle-orm` has `@prisma/client` as a peer, so a fresh resolution installs `prisma`, and the Drizzle option lists it as `false`.
+- In a monorepo the create CLI first approves the whole template's list, and after setup sets the entries it added to what the chosen options need (`settleAllowBuilds`). Entries the workspace already had are never changed.
 - The template's `pnpm-workspace.yaml` lists every option's entries. Setup rewrites it with only the selected ones.
 - A dependency update that adds a package with an install script fails pnpm 11 installs until it is listed. The `monorepo` CI job runs pnpm 11 and catches this.
 

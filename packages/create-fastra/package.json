@@ -1,6 +1,6 @@
 {
   "name": "create-fastra",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Create a type-safe Fastify API from Fastra: pick auth, ORM, storage, and Redis, get a clean project.",
   "type": "module",
   "bin": {

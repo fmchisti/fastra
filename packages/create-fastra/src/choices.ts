@@ -142,8 +142,11 @@ export const allowBuildsFor = (
   const merged: Record<string, boolean> = { ...choices.allowBuilds };
   for (const feature of choices.features) {
     for (const option of feature.options) {
-      if (answers === undefined || answers[feature.id] === option.value)
-        Object.assign(merged, option.allowBuilds);
+      if (answers !== undefined && answers[feature.id] !== option.value) continue;
+      // An option that needs a script wins over one that only lists the package to skip it
+      for (const [name, allowed] of Object.entries(option.allowBuilds ?? {})) {
+        merged[name] = allowed || merged[name] === true;
+      }
     }
   }
   return merged;

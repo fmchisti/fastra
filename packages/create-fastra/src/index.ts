@@ -29,7 +29,7 @@ import {
   findWorkspaceRoot,
   isVersionBelow,
   isWorkspacePackage,
-  removeAllowBuilds,
+  settleAllowBuilds,
   suggestPackageDir,
   turboPackageConfig,
   WORKSPACE_FILE,
@@ -315,13 +315,10 @@ const main = async () => {
   }
 
   if (setupDone && addedBuilds.length > 0) {
-    const unused = addedBuilds.filter((pkg) => !(pkg in neededBuilds));
-    if (unused.length > 0) {
-      await writeFile(
-        workspaceYamlPath,
-        removeAllowBuilds(await readFile(workspaceYamlPath, "utf8"), unused),
-      );
-    }
+    await writeFile(
+      workspaceYamlPath,
+      settleAllowBuilds(await readFile(workspaceYamlPath, "utf8"), addedBuilds, neededBuilds),
+    );
   }
   if (!installed) {
     fail(

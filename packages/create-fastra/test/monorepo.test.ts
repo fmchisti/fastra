@@ -8,6 +8,7 @@ import {
   isVersionBelow,
   isWorkspacePackage,
   removeAllowBuilds,
+  settleAllowBuilds,
   suggestPackageDir,
   turboPackageConfig,
   workspacePackageGlobs,
@@ -109,6 +110,26 @@ minimumReleaseAgeExclude:
 
   it("refuses a flow-style allowBuilds", () => {
     expect(addAllowBuilds("allowBuilds: { esbuild: true }\n", entries)).toBeNull();
+  });
+});
+
+describe("settleAllowBuilds", () => {
+  it("keeps the user's entries, drops unused additions, and sets kept ones to the needed value", () => {
+    const afterFirstInstall =
+      'packages:\n  - apps/*\nallowBuilds:\n  sharp: true\n  "@firebase/util": false\n  esbuild: false\n  prisma: true\n';
+
+    expect(
+      settleAllowBuilds(afterFirstInstall, ["@firebase/util", "esbuild", "prisma"], {
+        esbuild: false,
+        prisma: false,
+      }),
+    ).toBe("packages:\n  - apps/*\nallowBuilds:\n  sharp: true\n  esbuild: false\n  prisma: false\n");
+  });
+
+  it("does not touch entries the workspace already had, even when the project needs them", () => {
+    const yaml = "allowBuilds:\n  prisma: true\n";
+
+    expect(settleAllowBuilds(yaml, [], { prisma: false })).toBe(yaml);
   });
 });
 

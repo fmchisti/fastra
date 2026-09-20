@@ -149,6 +149,17 @@ export const addAllowBuilds = (yaml: string, entries: Record<string, boolean>): 
   return { yaml: next.join(newline), added };
 };
 
+/**
+ * After setup: replaces the entries this tool `added` for the first install (the whole template's
+ * list) with what the chosen options `needed`. A package can stay with another value: the template
+ * builds prisma, a Drizzle project only lists it as skipped.
+ */
+export const settleAllowBuilds = (yaml: string, added: string[], needed: Record<string, boolean>): string => {
+  const trimmed = removeAllowBuilds(yaml, added);
+  const kept = Object.fromEntries(Object.entries(needed).filter(([name]) => added.includes(name)));
+  return addAllowBuilds(trimmed, kept)?.yaml ?? trimmed;
+};
+
 /** Removes `names` from `allowBuilds` (and the key itself if it ends up empty). */
 export const removeAllowBuilds = (yaml: string, names: string[]): string => {
   const newline = yaml.includes("\r\n") ? "\r\n" : "\n";
