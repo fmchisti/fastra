@@ -174,6 +174,7 @@ pnpm dev
 | `pnpm type-check` | TypeScript check (src + tests) |
 | `pnpm check` / `pnpm check:fix` | Lint + format check (Biome) / apply fixes |
 | `pnpm test` / `pnpm test:watch` / `pnpm test:coverage` | Unit, integration, and type tests / watch mode / coverage report in `coverage/` |
+| `pnpm routes` | List every route with its auth requirement and summary (no database needed) |
 | `pnpm verify` | `check:fix`, `type-check`, and `test`: run before every commit |
 | `pnpm env:init` | Create `.env` from `.env.example` with generated secrets |
 | `pnpm hooks:install` | Optional pre-commit hook: Biome on staged files (`.githooks/`) |
@@ -186,6 +187,8 @@ Local services: `pnpm db:up` / `pnpm db:down` (Docker).
 Database:
 - `pnpm gen:module <name> --fields "..."`: scaffold a CRUD module with table, migration, and tests
 - `pnpm gen:field <module> --fields "..."`: add fields to a generated module (schema, table, repository, test fake, migration)
+- Both take `--migrate` to apply the migration right away. Recipes: [docs/modules.md](./docs/modules.md)
+- `pnpm db:sync`: after editing the schema by hand, create the migration and apply it (same command for Drizzle and Prisma)
 - `pnpm db:migrate:deploy`: apply migrations in production (after `pnpm build`)
 - `pnpm db:studio`: browse the database
 - `pnpm db:seed`: development data from `scripts/seed.ts`
@@ -327,6 +330,9 @@ Multi-stage image on `node:22-alpine`, production dependencies only, runs as the
 ## Learn more
 
 - [AGENTS.md](./AGENTS.md): rules and workflow for humans and AI agents
+<!-- @setup-if orm!=none -->
+- [docs/modules.md](./docs/modules.md): recipes for modules: add fields, validation, custom queries, relations
+<!-- @setup-endif -->
 - [docs/providers.md](./docs/providers.md): auth, ORM, storage, and Redis details, and how to add a provider
 <!-- @setup-template-only -->
 - [docs/template.md](./docs/template.md): maintaining Fastra (setup CLI, directives, verify matrix)

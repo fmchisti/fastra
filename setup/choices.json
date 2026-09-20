@@ -14,7 +14,10 @@
           "label": "Better Auth",
           "hint": "self-hosted: users & sessions in your Postgres, email/password + social",
           "requires": {
-            "orm": ["drizzle", "prisma"]
+            "orm": [
+              "drizzle",
+              "prisma"
+            ]
           }
         },
         {
@@ -83,7 +86,12 @@
           "label": "S3-compatible",
           "hint": "AWS S3, Cloudflare R2, MinIO, Railway Buckets (needs auth: files belong to users)",
           "requires": {
-            "auth": ["better-auth", "supabase", "firebase", "logto"]
+            "auth": [
+              "better-auth",
+              "supabase",
+              "firebase",
+              "logto"
+            ]
           }
         },
         {
@@ -91,7 +99,12 @@
           "label": "Local disk",
           "hint": "development / single server; no presigned URLs (needs auth)",
           "requires": {
-            "auth": ["better-auth", "supabase", "firebase", "logto"]
+            "auth": [
+              "better-auth",
+              "supabase",
+              "firebase",
+              "logto"
+            ]
           }
         },
         {
