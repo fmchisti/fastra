@@ -65,3 +65,25 @@ export const addNamedImports = (content: string, source: string, names: string[]
   const merged = [...new Set([...existing, ...names])].sort();
   return content.replace(statement, `import { ${merged.join(", ")} } from "${source}";`);
 };
+
+/** Insert whole lines (plus a blank line) right before the first line matching `start`. */
+export const insertBeforeLine = (
+  content: string,
+  start: RegExp,
+  newLines: string[],
+  file: string,
+): string => {
+  const lines = content.split("\n");
+  const index = lines.findIndex((line) => start.test(line));
+  if (index === -1) throw new AnchorError(`${file}: could not find ${start}`);
+  lines.splice(index, 0, ...newLines, "");
+  return lines.join("\n");
+};
+
+/** Insert `text` right after the first match of `anchor`, e.g. new items after an array's `[`. */
+export const insertAfterMatch = (content: string, anchor: RegExp, text: string, file: string): string => {
+  const match = anchor.exec(content);
+  if (!match) throw new AnchorError(`${file}: could not find ${anchor}`);
+  const end = match.index + match[0].length;
+  return `${content.slice(0, end)}${text}${content.slice(end)}`;
+};

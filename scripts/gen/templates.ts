@@ -1,4 +1,4 @@
-import type { Field, FieldType, ModuleNames } from "./model.ts";
+import type { Field, ModuleNames } from "./model.ts";
 
 export interface TemplateContext {
   names: ModuleNames;
@@ -11,51 +11,127 @@ export interface TemplateContext {
 // Per-type building blocks
 // ---------------------------------------------------------------------------
 
-const RESPONSE_ZOD: Record<FieldType, string> = {
-  string: "z.string()",
-  text: "z.string()",
-  int: "z.number().int()",
-  float: "z.number()",
-  boolean: "z.boolean()",
-  datetime: "z.date()",
+interface TypeSpec {
+  response: string;
+  input: string;
+  drizzle: { builder: string; column: (column: string) => string };
+  prisma: { type: string; attributes: string };
+  /** JSON sample values used by generated tests */
+  sample: { create: string; update: string };
+  /** Row value → entity value, when the ORM returns another type (`value` is e.g. `row.price`) */
+  fromRow?: { drizzle?: (value: string) => string; prisma?: (value: string) => string };
+  default?: (value: string) => { zod: string; drizzle: string; prisma: string };
+}
+
+const literal = (value: string) => ({ zod: value, drizzle: value, prisma: value });
+const quoted = (value: string) => literal(JSON.stringify(value));
+
+/** Names of a field's Postgres enum: `productStatus` (Drizzle), `ProductStatus` (Prisma), `product_status`. */
+const enumNames = (names: ModuleNames, field: Field) => {
+  const forms = (form: "camel" | "pascal" | "snake") => names.singular[form];
+  const Field = field.name.charAt(0).toUpperCase() + field.name.slice(1);
+  return {
+    camel: `${forms("camel")}${Field}`,
+    pascal: `${forms("pascal")}${Field}`,
+    snake: `${forms("snake")}_${field.column}`,
+  };
 };
 
-const INPUT_ZOD: Record<FieldType, string> = {
-  string: "z.string().trim().min(1).max(255)",
-  text: "z.string().max(10_000)",
-  int: "z.number().int()",
-  float: "z.number()",
-  boolean: "z.boolean()",
-  // Accept ISO strings in JSON, store and return Date
-  datetime: "z.iso.datetime({ offset: true }).transform((value) => new Date(value))",
-};
-
-const DRIZZLE_BUILDER: Record<FieldType, { fn: string; call: (column: string) => string }> = {
-  string: { fn: "varchar", call: (c) => `varchar("${c}", { length: 255 })` },
-  text: { fn: "text", call: (c) => `text("${c}")` },
-  int: { fn: "integer", call: (c) => `integer("${c}")` },
-  float: { fn: "doublePrecision", call: (c) => `doublePrecision("${c}")` },
-  boolean: { fn: "boolean", call: (c) => `boolean("${c}")` },
-  datetime: { fn: "timestamp", call: (c) => `timestamp("${c}", { withTimezone: true })` },
-};
-
-const PRISMA_TYPE: Record<FieldType, { type: string; attributes: string }> = {
-  string: { type: "String", attributes: "@db.VarChar(255)" },
-  text: { type: "String", attributes: "" },
-  int: { type: "Int", attributes: "" },
-  float: { type: "Float", attributes: "" },
-  boolean: { type: "Boolean", attributes: "" },
-  datetime: { type: "DateTime", attributes: "@db.Timestamptz(6)" },
-};
-
-/** JSON sample values used by generated tests. */
-const SAMPLE: Record<FieldType, { create: string; update: string }> = {
-  string: { create: '"Sample"', update: '"Updated"' },
-  text: { create: '"Sample text"', update: '"Updated text"' },
-  int: { create: "42", update: "7" },
-  float: { create: "9.5", update: "1.25" },
-  boolean: { create: "true", update: "false" },
-  datetime: { create: '"2026-01-01T00:00:00.000Z"', update: '"2026-02-01T00:00:00.000Z"' },
+const typeSpec = (field: Field, names: ModuleNames): TypeSpec => {
+  switch (field.type) {
+    case "string":
+      return {
+        response: "z.string()",
+        input: "z.string().trim().min(1).max(255)",
+        drizzle: { builder: "varchar", column: (c) => `varchar("${c}", { length: 255 })` },
+        prisma: { type: "String", attributes: "@db.VarChar(255)" },
+        sample: { create: '"Sample"', update: '"Updated"' },
+        default: quoted,
+      };
+    case "text":
+      return {
+        response: "z.string()",
+        input: "z.string().max(10_000)",
+        drizzle: { builder: "text", column: (c) => `text("${c}")` },
+        prisma: { type: "String", attributes: "" },
+        sample: { create: '"Sample text"', update: '"Updated text"' },
+        default: quoted,
+      };
+    case "int":
+      return {
+        response: "z.number().int()",
+        input: "z.number().int()",
+        drizzle: { builder: "integer", column: (c) => `integer("${c}")` },
+        prisma: { type: "Int", attributes: "" },
+        sample: { create: "42", update: "7" },
+        default: literal,
+      };
+    case "float":
+      return {
+        response: "z.number()",
+        input: "z.number()",
+        drizzle: { builder: "doublePrecision", column: (c) => `doublePrecision("${c}")` },
+        prisma: { type: "Float", attributes: "" },
+        sample: { create: "9.5", update: "1.25" },
+        default: literal,
+      };
+    case "decimal":
+      // Exact (money). A string in JSON and in code, because a JS number cannot hold every value.
+      return {
+        response: "z.string()",
+        input: 'z.string().regex(/^-?\\d{1,10}\\.\\d{2}$/, "Use a number with 2 decimals, like 19.99")',
+        drizzle: { builder: "numeric", column: (c) => `numeric("${c}", { precision: 12, scale: 2 })` },
+        prisma: { type: "Decimal", attributes: "@db.Decimal(12, 2)" },
+        sample: { create: '"19.99"', update: '"5.00"' },
+        fromRow: { prisma: (value) => `${value}.toFixed(2)` },
+        default: (value) => {
+          const fixed = Number(value).toFixed(2);
+          return { zod: `"${fixed}"`, drizzle: `"${fixed}"`, prisma: fixed };
+        },
+      };
+    case "boolean":
+      return {
+        response: "z.boolean()",
+        input: "z.boolean()",
+        drizzle: { builder: "boolean", column: (c) => `boolean("${c}")` },
+        prisma: { type: "Boolean", attributes: "" },
+        sample: { create: "true", update: "false" },
+        default: literal,
+      };
+    case "datetime":
+      return {
+        response: "z.date()",
+        // Accept ISO strings in JSON, store and return Date
+        input: "z.iso.datetime({ offset: true }).transform((value) => new Date(value))",
+        drizzle: { builder: "timestamp", column: (c) => `timestamp("${c}", { withTimezone: true })` },
+        prisma: { type: "DateTime", attributes: "@db.Timestamptz(6)" },
+        sample: { create: '"2026-01-01T00:00:00.000Z"', update: '"2026-02-01T00:00:00.000Z"' },
+      };
+    case "uuid":
+      return {
+        response: "z.uuid()",
+        input: "z.uuid()",
+        drizzle: { builder: "uuid", column: (c) => `uuid("${c}")` },
+        prisma: { type: "String", attributes: "@db.Uuid" },
+        sample: {
+          create: '"3f0c8d7e-6b1a-4c2d-9e5f-0a1b2c3d4e5f"',
+          update: '"9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d"',
+        },
+      };
+    case "enum": {
+      const values = field.values ?? [];
+      const zod = `z.enum([${values.map((value) => `"${value}"`).join(", ")}])`;
+      const { camel, pascal } = enumNames(names, field);
+      return {
+        response: zod,
+        input: zod,
+        drizzle: { builder: "pgEnum", column: (c) => `${camel}("${c}")` },
+        prisma: { type: pascal, attributes: "" },
+        sample: { create: `"${values[0]}"`, update: `"${values[1]}"` },
+        default: (value) => ({ zod: `"${value}"`, drizzle: `"${value}"`, prisma: value }),
+      };
+    }
+  }
 };
 
 const lines = (items: string[], indent: string) => items.map((item) => `${indent}${item}`).join("\n");
@@ -70,32 +146,59 @@ export interface FieldLines {
   create: string;
   update: string;
   /** repository: row → entity mapper */
-  mapper: string;
-  /** Drizzle column and the pg-core builder it imports */
+  mapper: { drizzle: string; prisma: string };
+  /** Drizzle column, the pg-core builder it imports, and for an enum the `pgEnum` before the table */
   drizzleColumn: string;
   drizzleBuilder: string;
-  /** Prisma model field */
+  drizzleDeclaration?: string;
+  /** Prisma model field, and for an enum the `enum` block after the model */
   prismaField: string;
+  prismaDeclaration?: string;
+  /** `!index` */
+  drizzleIndex?: string;
+  prismaIndex?: string;
   /** test fake: POST sample, PATCH sample, update merge */
   sampleCreate: string;
   sampleUpdate: string;
   merge: string;
 }
 
-export const fieldLines = (f: Field): FieldLines => {
-  const prisma = PRISMA_TYPE[f.type];
+export const fieldLines = (f: Field, names: ModuleNames): FieldLines => {
+  const spec = typeSpec(f, names);
+  const fallback = f.default === undefined ? undefined : spec.default?.(f.default);
   const map = f.column === f.name ? "" : `@map("${f.column}")`;
-  const attributes = [map, prisma.attributes].filter(Boolean).join(" ");
+  const prismaDefault = fallback ? `@default(${fallback.prisma})` : "";
+  const attributes = [map, prismaDefault, spec.prisma.attributes].filter(Boolean).join(" ");
+  const fromRow = (orm: "drizzle" | "prisma") => {
+    const convert = spec.fromRow?.[orm];
+    if (!convert) return `${f.name}: row.${f.name},`;
+    return f.optional
+      ? `${f.name}: row.${f.name} === null ? null : ${convert(`row.${f.name}`)},`
+      : `${f.name}: ${convert(`row.${f.name}`)},`;
+  };
+  const indexName = `${names.plural.snake}_${f.column}_idx`;
+  const isEnum = f.type === "enum";
+  const { camel, pascal, snake } = enumNames(names, f);
+  const values = f.values ?? [];
+
   return {
-    response: `${f.name}: ${RESPONSE_ZOD[f.type]}${f.optional ? ".nullable()" : ""},`,
-    create: `${f.name}: ${INPUT_ZOD[f.type]}${f.optional ? ".nullable().default(null)" : ""},`,
-    update: `${f.name}: ${INPUT_ZOD[f.type]}${f.optional ? ".nullable()" : ""}.optional(),`,
-    mapper: `${f.name}: row.${f.name},`,
-    drizzleColumn: `${f.name}: ${DRIZZLE_BUILDER[f.type].call(f.column)}${f.optional ? "" : ".notNull()"},`,
-    drizzleBuilder: DRIZZLE_BUILDER[f.type].fn,
-    prismaField: `${f.name} ${prisma.type}${f.optional ? "?" : ""}${attributes ? ` ${attributes}` : ""}`,
-    sampleCreate: `${f.name}: ${SAMPLE[f.type].create},`,
-    sampleUpdate: `${f.name}: ${SAMPLE[f.type].update},`,
+    response: `${f.name}: ${spec.response}${f.optional ? ".nullable()" : ""},`,
+    create: `${f.name}: ${spec.input}${f.optional ? ".nullable().default(null)" : ""}${fallback ? `.default(${fallback.zod})` : ""},`,
+    update: `${f.name}: ${spec.input}${f.optional ? ".nullable()" : ""}.optional(),`,
+    mapper: { drizzle: fromRow("drizzle"), prisma: fromRow("prisma") },
+    drizzleColumn: `${f.name}: ${spec.drizzle.column(f.column)}${f.optional ? "" : ".notNull()"}${fallback ? `.default(${fallback.drizzle})` : ""},`,
+    drizzleBuilder: spec.drizzle.builder,
+    ...(isEnum && {
+      drizzleDeclaration: `export const ${camel} = pgEnum("${snake}", [${values.map((value) => `"${value}"`).join(", ")}]);`,
+      prismaDeclaration: `enum ${pascal} {\n${values.map((value) => `  ${value}`).join("\n")}\n\n  @@map("${snake}")\n}`,
+    }),
+    prismaField: `${f.name} ${spec.prisma.type}${f.optional ? "?" : ""}${attributes ? ` ${attributes}` : ""}`,
+    ...(f.index && {
+      drizzleIndex: `index("${indexName}").on(table.${f.name})`,
+      prismaIndex: `@@index([${f.name}], map: "${indexName}")`,
+    }),
+    sampleCreate: `${f.name}: ${spec.sample.create},`,
+    sampleUpdate: `${f.name}: ${spec.sample.update},`,
     merge: `${f.name}: input.${f.name} === undefined ? row.${f.name} : input.${f.name},`,
   };
 };
@@ -106,7 +209,7 @@ export const fieldLines = (f: Field): FieldLines => {
 
 export const schemaTemplate = ({ names, fields }: TemplateContext) => {
   const { pascal } = names.singular;
-  const rendered = fields.map(fieldLines);
+  const rendered = fields.map((f) => fieldLines(f, names));
   const response = rendered.map((f) => f.response);
   const create = rendered.map((f) => f.create);
   const update = rendered.map((f) => f.update);
@@ -206,12 +309,12 @@ export type { ${pascal}Repository } from "./types.ts";
 `;
 };
 
-const toEntity = ({ names, fields }: TemplateContext, rowType: string) => {
+const toEntity = ({ names, fields }: TemplateContext, rowType: string, orm: "drizzle" | "prisma") => {
   const { pascal } = names.singular;
   return `const to${pascal} = (row: ${rowType}): ${pascal} => ({
   id: row.id,
 ${lines(
-  fields.map((f) => fieldLines(f).mapper),
+  fields.map((f) => fieldLines(f, names).mapper[orm]),
   "  ",
 )}
   createdAt: row.createdAt,
@@ -234,7 +337,7 @@ import { toOffset } from "../../../lib/pagination.ts";
 import type { ${singular.pascal} } from "../schema.ts";
 import type { ${singular.pascal}Repository } from "./types.ts";
 
-${toEntity(context, `${singular.pascal}Row`)}
+${toEntity(context, `${singular.pascal}Row`, "drizzle")}
 ${owned ? `\nconst byOwner = (userId: string, id: string) => and(eq(${table}.userId, userId), eq(${table}.id, id));\n` : ""}
 export const create${singular.pascal}Repository = ({ client: db }: AppDatabase): ${singular.pascal}Repository => ({
   list: async (${u}query) => {
@@ -297,7 +400,7 @@ import { toOffset } from "../../../lib/pagination.ts";
 import type { ${singular.pascal} } from "../schema.ts";
 import type { ${singular.pascal}Repository } from "./types.ts";
 
-${toEntity(context, `${singular.pascal}Row`)}
+${toEntity(context, `${singular.pascal}Row`, "prisma")}
 
 export const create${singular.pascal}Repository = ({ client: prisma }: AppDatabase): ${singular.pascal}Repository => ({
   list: async (${u}query) => {
@@ -494,13 +597,21 @@ export default ${singular.camel}Routes;
 export const drizzleTableTemplate = ({ names, fields, owned }: TemplateContext) => {
   const { singular, plural } = names;
   const builders = new Set(["index", "pgTable", "timestamp", "uuid", ...(owned ? ["text"] : [])]);
-  for (const field of fields) builders.add(fieldLines(field).drizzleBuilder);
-  const columns = fields.map((f) => fieldLines(f).drizzleColumn);
+  const rendered = fields.map((f) => fieldLines(f, names));
+  for (const field of rendered) builders.add(field.drizzleBuilder);
+  const columns = rendered.map((f) => f.drizzleColumn);
+  const declarations = rendered.flatMap((f) => f.drizzleDeclaration ?? []);
+  const indexes = [
+    owned
+      ? `index("${plural.snake}_user_id_created_at_idx").on(table.userId, table.createdAt)`
+      : `index("${plural.snake}_created_at_idx").on(table.createdAt)`,
+    ...rendered.flatMap((f) => f.drizzleIndex ?? []),
+  ];
 
   return `import { sql } from "drizzle-orm";
 import { ${[...builders].sort().join(", ")} } from "drizzle-orm/pg-core";
 
-export const ${plural.camel} = pgTable(
+${declarations.length > 0 ? `${declarations.join("\n")}\n\n` : ""}export const ${plural.camel} = pgTable(
   "${plural.snake}",
   {
     id: uuid("id").primaryKey().default(sql\`gen_random_uuid()\`),
@@ -508,7 +619,7 @@ ${owned ? '    // Auth provider user id. No foreign key, so any auth provider wo
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [${owned ? `index("${plural.snake}_user_id_created_at_idx").on(table.userId, table.createdAt)` : `index("${plural.snake}_created_at_idx").on(table.createdAt)`}],
+  (table) => [${indexes.join(", ")}],
 );
 
 export type ${singular.pascal}Row = typeof ${plural.camel}.$inferSelect;
@@ -517,7 +628,10 @@ export type ${singular.pascal}Row = typeof ${plural.camel}.$inferSelect;
 
 export const prismaModelTemplate = ({ names, fields, owned }: TemplateContext) => {
   const { singular, plural } = names;
-  const columns = fields.map((f) => `  ${fieldLines(f).prismaField}`);
+  const rendered = fields.map((f) => fieldLines(f, names));
+  const columns = rendered.map((f) => `  ${f.prismaField}`);
+  const indexes = rendered.flatMap((f) => (f.prismaIndex ? `  ${f.prismaIndex}\n` : []));
+  const declarations = rendered.flatMap((f) => f.prismaDeclaration ?? []);
 
   return `model ${singular.pascal} {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -526,9 +640,9 @@ ${owned ? '  // Auth provider user id. No foreign key, so any auth provider work
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   ${owned ? `@@index([userId, createdAt], map: "${plural.snake}_user_id_created_at_idx")` : `@@index([createdAt], map: "${plural.snake}_created_at_idx")`}
-  @@map("${plural.snake}")
+${indexes.join("")}  @@map("${plural.snake}")
 }
-`;
+${declarations.map((declaration) => `\n${declaration}\n`).join("")}`;
 };
 
 // ---------------------------------------------------------------------------
@@ -538,7 +652,7 @@ ${owned ? '  // Auth provider user id. No foreign key, so any auth provider work
 export const fakeTemplate = ({ names, fields, owned }: TemplateContext) => {
   const { singular } = names;
   const S = singular.pascal;
-  const rendered = fields.map(fieldLines);
+  const rendered = fields.map((f) => fieldLines(f, names));
   const create = rendered.map((f) => f.sampleCreate);
   const update = rendered.map((f) => f.sampleUpdate);
   const merge = rendered.map((f) => f.merge);

@@ -105,12 +105,12 @@ Each feature lives in `src/modules/<feature>/`. Copy the closest existing module
 **CRUD resource stored in the database (most cases): generate, then edit.**
 
 ```bash
-pnpm gen:module product --fields "name:string price:float stock:int description:text? releasedAt:datetime?"
+pnpm gen:module product --fields "name:string price:decimal stock:int=0 status:enum(draft,published)=draft sku:string?!index description:text?"
 pnpm db:migrate
 pnpm verify
 ```
 
-- Field types: `string` (≤255), `text`, `int`, `float`, `boolean`, `datetime`. `?` = nullable. `id`, `createdAt`, `updatedAt` are added.
+- Field syntax: `name:type[?][!index][=default]`. Types: `string` (≤255), `text`, `int`, `float`, `decimal` (money: `numeric(12,2)`, a string like `"19.99"` in JSON and code), `boolean`, `datetime`, `uuid`, `enum(a,b)` (a Postgres enum). `?` = nullable, `!index` = index the column, `=value` = column default, also used when POST omits the field (required fields only). `id`, `createdAt`, `updatedAt` are added. Quote the list: shells expand `?`, `!`, and parentheses.
 <!-- @setup-if auth!=none -->
 - Records get a `userId`, are scoped to their owner, and routes require sign-in. Use `--public` for data everyone can read and write.
 <!-- @setup-endif -->
@@ -119,7 +119,7 @@ pnpm verify
 <!-- @setup-endif -->
 - Creates the module files, table, migration, fake, route tests, and repository contract tests, and registers the module at the `// @gen:` markers in `app.ts`, `container.ts`, `swagger.ts`, `test/helpers.ts`.
 - `--plural people` for irregular names, `--dry-run` to preview. It refuses to overwrite files.
-- **Add fields later** with `pnpm gen:field product --fields "sku:string? weight:float"`: it updates the schema (response, POST, PATCH), table, repository mapper, and test fake, and creates the migration. It writes nothing unless every file still has its insertion point; otherwise it lists the manual steps. A required field on a table with rows needs a `DEFAULT` in the migration.
+- **Add fields later** with `pnpm gen:field product --fields "sku:string? weight:float"`: it updates the schema (response, POST, PATCH), table, repository mapper, and test fake, and creates the migration. It writes nothing unless every file still has its insertion point; otherwise it lists the manual steps. Give a required field a default (`weight:float=0`), or the migration fails on a table that has rows.
 - Then customize: add validation to the schema, rules to the service, and extra query methods to the repository interface (plus fake and implementation).
 
 <!-- @setup-endif -->

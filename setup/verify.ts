@@ -90,14 +90,21 @@ const verify = async (selection: Selection): Promise<Result> => {
           "scripts/gen-module.ts",
           "product-item",
           "--fields",
-          "title:string notes:text? quantity:int price:float active:boolean releasedAt:datetime?",
+          "title:string notes:text? quantity:int=0 price:float active:boolean releasedAt:datetime? total:decimal status:enum(draft,published)=draft externalId:uuid?!index",
         ],
         { cwd: dir, timeout: 300_000 },
       );
       // ...and gen:field must fit into what gen:module wrote, with a second migration
       await exec(
         "pnpm",
-        ["exec", "tsx", "scripts/gen-field.ts", "product-item", "--fields", "sku:string? weight:float"],
+        [
+          "exec",
+          "tsx",
+          "scripts/gen-field.ts",
+          "product-item",
+          "--fields",
+          "sku:string?!index weight:float=0 size:enum(small,large)=small cost:decimal?",
+        ],
         { cwd: dir, timeout: 300_000 },
       );
     }

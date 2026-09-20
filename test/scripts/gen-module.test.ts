@@ -62,9 +62,28 @@ describe("pluralize", () => {
 describe("parseFields", () => {
   it("parses types, optional markers, and snake_case columns", () => {
     expect(parseFields("title:string releasedAt:datetime? price:float")).toEqual([
-      { name: "title", column: "title", type: "string", optional: false },
-      { name: "releasedAt", column: "released_at", type: "datetime", optional: true },
-      { name: "price", column: "price", type: "float", optional: false },
+      { name: "title", column: "title", type: "string", optional: false, index: false },
+      { name: "releasedAt", column: "released_at", type: "datetime", optional: true, index: false },
+      { name: "price", column: "price", type: "float", optional: false, index: false },
+    ]);
+  });
+
+  it("parses enum values, indexes, and defaults, with commas inside enum(...)", () => {
+    expect(
+      parseFields("status:enum(draft, published)=draft,sku:string?!index stock:int=0 price:decimal=5"),
+    ).toEqual([
+      {
+        name: "status",
+        column: "status",
+        type: "enum",
+        optional: false,
+        index: false,
+        values: ["draft", "published"],
+        default: "draft",
+      },
+      { name: "sku", column: "sku", type: "string", optional: true, index: true },
+      { name: "stock", column: "stock", type: "int", optional: false, index: false, default: "0" },
+      { name: "price", column: "price", type: "decimal", optional: false, index: false, default: "5" },
     ]);
   });
 
@@ -72,10 +91,20 @@ describe("parseFields", () => {
     ["", /at least one field/],
     ["title", /Invalid field/],
     ["Title:string", /Invalid field/],
-    ["title:uuid", /Invalid type/],
+    ["title:json", /Invalid type/],
     ["id:string", /added automatically/],
     ["userId:string", /added automatically/],
     ["a:int a:int", /Duplicate/],
+    ["status:enum", /list the values/],
+    ["status:enum(draft)", /at least two/],
+    ["status:enum(Draft,done)", /snake_case/],
+    ["title:string(a,b)", /only enum takes/],
+    ["status:enum(a,b)=c", /must be one of a, b/],
+    ["stock:int=many", /must be a whole number/],
+    ["title:string?=x", /defaults to null/],
+    ["ownerId:uuid=1", /cannot have a default/],
+    ["title:string!unique", /unknown modifier/],
+    ['title:string=a"b', /without quotes/],
   ])("rejects %j", (input, error) => {
     expect(() => parseFields(input)).toThrow(error);
   });
