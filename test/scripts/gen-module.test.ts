@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseFields, parseModuleName, pluralize } from "../../scripts/gen/model.ts";
+import { parseFields, parseListOptions, parseModuleName, pluralize } from "../../scripts/gen/model.ts";
 import {
   addImport,
   detectOrm,
@@ -7,6 +7,7 @@ import {
   insertBeforeMarker,
   planModule,
 } from "../../scripts/gen-module.ts";
+import { escapeLike } from "../../src/lib/crud.ts";
 
 describe("parseModuleName", () => {
   it("derives every naming form", () => {
@@ -107,6 +108,67 @@ describe("parseFields", () => {
     ['title:string=a"b', /without quotes/],
   ])("rejects %j", (input, error) => {
     expect(() => parseFields(input)).toThrow(error);
+  });
+});
+
+describe("escapeLike", () => {
+  it("escapes LIKE wildcards and the escape character", () => {
+    expect(escapeLike("50%_off\\")).toBe("50\\%\\_off\\\\");
+    expect(escapeLike("plain")).toBe("plain");
+  });
+});
+
+describe("parseListOptions", () => {
+  const fields = parseFields("name:string note:text? price:decimal status:enum(a,b) ownerRef:uuid? page:int");
+
+  it("resolves field names for search, sort, and filter", () => {
+    const list = parseListOptions(fields, { search: "name, note", sort: "price", filter: "status,ownerRef" });
+
+    expect(list.search.map((f) => f.name)).toEqual(["name", "note"]);
+    expect(list.sort.map((f) => f.name)).toEqual(["price"]);
+    expect(list.filter.map((f) => f.name)).toEqual(["status", "ownerRef"]);
+    expect(parseListOptions(fields, {})).toEqual({ search: [], sort: [], filter: [] });
+  });
+
+  it.each([
+    [{ search: "price" }, /only text is searched/],
+    [{ sort: "note" }, /only required/],
+    [{ sort: "status" }, /only required/],
+    [{ filter: "price" }, /can be filtered/],
+    [{ filter: "missing" }, /no such field\. Fields: name, note/],
+    [{ filter: "page" }, /already a query parameter/],
+  ])("rejects %j", (input, error) => {
+    expect(() => parseListOptions(fields, input)).toThrow(error);
+  });
+});
+
+describe("list options in generated code", () => {
+  const names = parseModuleName("product");
+  const fields = parseFields("name:string stock:int status:enum(draft,published)");
+  const list = parseListOptions(fields, { search: "name", sort: "stock", filter: "status" });
+  const file = (orm: "drizzle" | "prisma", suffix: string, withList = true) =>
+    planModule(names, fields, orm, true, withList ? list : undefined).find((f) => f.path.endsWith(suffix))
+      ?.content ?? "";
+
+  it("adds the query schema only when options are given", () => {
+    expect(file("drizzle", "schema.ts")).toContain(
+      "export const ListProductsQuerySchema = PaginationQuerySchema.extend({",
+    );
+    expect(file("drizzle", "schema.ts")).toContain(
+      'sort: z.enum(["createdAt", "stock"]).default("createdAt"),',
+    );
+    expect(file("drizzle", "schema.ts", false)).toContain("querystring: PaginationQuerySchema,");
+    expect(file("drizzle", "schema.ts", false)).not.toContain("QuerySchema = ");
+  });
+
+  it("escapes LIKE wildcards in both ORMs", () => {
+    expect(file("drizzle", "repository/drizzle.ts")).toContain("escapeLike(query.search)");
+    expect(file("prisma", "repository/prisma.ts")).toContain("escapeLike(query.search)");
+  });
+
+  it("keeps every query scoped to the owner", () => {
+    expect(file("drizzle", "repository/drizzle.ts")).toContain("eq(products.userId, userId),");
+    expect(file("prisma", "repository/prisma.ts")).toMatch(/const where = \{\n\s+userId,/);
   });
 });
 

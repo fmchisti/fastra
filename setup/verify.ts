@@ -92,6 +92,12 @@ const verify = async (selection: Selection): Promise<Result> => {
           "product-item",
           "--fields",
           "title:string notes:text? quantity:int=0 price:float active:boolean releasedAt:datetime? total:decimal status:enum(draft,published)=draft externalId:uuid?!index",
+          "--search",
+          "title,notes",
+          "--sort",
+          "title,quantity,price,total,active",
+          "--filter",
+          "status,active,quantity,externalId",
         ],
         { cwd: dir, timeout: 300_000 },
       );

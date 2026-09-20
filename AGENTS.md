@@ -116,6 +116,7 @@ pnpm verify
 <!-- @setup-if auth=none -->
 - This project has no auth, so generated resources are public (no `userId`). Add auth to the routes before exposing write access publicly.
 <!-- @setup-endif -->
+- List route: pagination only by default. `--search name,description` adds `?search=` (case-insensitive, text fields), `--sort name,price` adds `?sort=&order=` (required fields; default stays `createdAt desc`), `--filter status,active` adds exact-match parameters (string, int, boolean, uuid, enum). The ORM repository and the in-memory fake implement the same rules, and `describeListContract` runs the same cases against both.
 - `--migrate` applies the migration (needs the database: `pnpm db:up`); without it run `pnpm db:migrate`. `pnpm routes` lists the registered routes.
 - Creates the module files, table, migration, fake, route tests, and repository contract tests, and registers the module at the `// @gen:` markers in `app.ts`, `container.ts`, `swagger.ts`, `test/helpers.ts`.
 - `--plural people` for irregular names, `--dry-run` to preview. It refuses to overwrite files.
