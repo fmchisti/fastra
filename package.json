@@ -31,6 +31,7 @@
     "check": "biome check .",
     "check:fix": "biome check --write .",
     "gen:module": "tsx scripts/gen-module.ts",
+    "gen:field": "tsx scripts/gen-field.ts",
     "env:init": "tsx scripts/init-env.ts",
     "hooks:install": "tsx scripts/install-hooks.ts",
     "build:create": "tsc -p packages/create-fastra/tsconfig.json",

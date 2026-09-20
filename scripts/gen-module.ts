@@ -24,7 +24,7 @@ and routes require sign-in). --public, or a project without auth, creates a publ
 Routes: /api/<plural> (GET, POST, GET/:id, PATCH/:id, DELETE/:id).
 `;
 
-type Orm = "drizzle" | "prisma";
+export type Orm = "drizzle" | "prisma";
 
 /** Which ORM this project uses, from the re-export in src/db/index.ts. */
 export const detectOrm = async (root: string): Promise<Orm> => {
@@ -153,7 +153,7 @@ const register = async (root: string, names: ModuleNames, orm: Orm) => {
   }
 };
 
-const run = async (command: string, args: string[], cwd: string) => {
+export const run = async (command: string, args: string[], cwd: string) => {
   const env = {
     ...process.env,
     DATABASE_URL: process.env.DATABASE_URL ?? "postgresql://gen:gen@localhost:5432/gen",
@@ -167,14 +167,20 @@ const run = async (command: string, args: string[], cwd: string) => {
   });
 };
 
-/** Creates a migration for the new table without connecting to a database. */
-const createMigration = async (
+/** Prisma migrations are diffed against the schema as it was before the change: copy it aside first. */
+export const snapshotPrismaSchema = async (root: string): Promise<string> => {
+  const snapshot = path.join(await mkdtemp(path.join(tmpdir(), "prisma-schema-")), "schema");
+  await cp(path.join(root, "prisma/schema"), snapshot, { recursive: true });
+  return snapshot;
+};
+
+/** Creates a migration named `name` for the schema change without connecting to a database. */
+export const createMigration = async (
   root: string,
-  names: ModuleNames,
+  name: string,
   orm: Orm,
   previousPrismaSchema: string | null,
 ) => {
-  const name = `add_${names.plural.snake}`;
   if (orm === "drizzle") {
     await run("pnpm", ["exec", "drizzle-kit", "generate", "--name", name], root);
     return;
@@ -235,10 +241,7 @@ export const generateModule = async (options: GenerateOptions): Promise<string[]
 
   // Prisma migrations are diffed against the schema as it was before this module
   let previousPrismaSchema: string | null = null;
-  if (orm === "prisma" && !options.skipTooling) {
-    previousPrismaSchema = path.join(await mkdtemp(path.join(tmpdir(), "prisma-schema-")), "schema");
-    await cp(path.join(root, "prisma/schema"), previousPrismaSchema, { recursive: true });
-  }
+  if (orm === "prisma" && !options.skipTooling) previousPrismaSchema = await snapshotPrismaSchema(root);
 
   for (const file of files) {
     await mkdir(path.dirname(path.join(root, file.path)), { recursive: true });
@@ -247,7 +250,7 @@ export const generateModule = async (options: GenerateOptions): Promise<string[]
   await register(root, names, orm);
 
   if (!options.skipTooling) {
-    await createMigration(root, names, orm, previousPrismaSchema);
+    await createMigration(root, `add_${names.plural.snake}`, orm, previousPrismaSchema);
     if (previousPrismaSchema) await rm(path.dirname(previousPrismaSchema), { recursive: true, force: true });
     await run("pnpm", ["exec", "biome", "check", "--write", "."], root);
   }

@@ -185,6 +185,7 @@ Local services: `pnpm db:up` / `pnpm db:down` (Docker).
 
 Database:
 - `pnpm gen:module <name> --fields "..."`: scaffold a CRUD module with table, migration, and tests
+- `pnpm gen:field <module> --fields "..."`: add fields to a generated module (schema, table, repository, test fake, migration)
 - `pnpm db:migrate:deploy`: apply migrations in production (after `pnpm build`)
 - `pnpm db:studio`: browse the database
 - `pnpm db:seed`: development data from `scripts/seed.ts`

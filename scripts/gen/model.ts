@@ -70,13 +70,18 @@ export const pluralize = (word: string): string => {
 };
 
 /** "blog-post" → blogPost / blogPosts / blog_posts ... Pass `plural` for irregular words. */
-export const parseModuleName = (input: string, plural?: string): ModuleNames => {
+export const parseModuleName = (
+  input: string,
+  plural?: string,
+  // Reserved names cannot be created, but commands that change an existing module accept them
+  { allowReserved = false }: { allowReserved?: boolean } = {},
+): ModuleNames => {
   if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(input)) {
     throw new Error(`Invalid module name "${input}": use letters, numbers, - or _ (e.g. product, blog-post)`);
   }
   const words = splitWords(input);
   const singular = toForms(words);
-  if (RESERVED_MODULES.has(singular.camel)) {
+  if (!allowReserved && RESERVED_MODULES.has(singular.camel)) {
     throw new Error(`"${input}" is reserved by an existing module or table`);
   }
 
