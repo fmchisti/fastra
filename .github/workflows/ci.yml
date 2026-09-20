@@ -94,6 +94,8 @@ jobs:
           - { pnpm: 10.28.2, auth: better-auth, orm: drizzle, storage: local }
           # pnpm 11 fails installs on unapproved install scripts; Prisma needs its engines built
           - { pnpm: 11.25.0, auth: better-auth, orm: prisma, storage: local }
+          # drizzle-orm pulls prisma in as a peer; its install scripts must be listed as skipped
+          - { pnpm: 11.25.0, auth: better-auth, orm: drizzle, storage: local }
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -140,7 +142,7 @@ jobs:
           grep -q '^  esbuild: false' pnpm-workspace.yaml
           ! grep -q 'set this to' pnpm-workspace.yaml || exit 1
           ! grep -q 'firebase' pnpm-workspace.yaml || exit 1
-          if [ "${{ matrix.orm }}" = prisma ]; then grep -q '^  prisma: true' pnpm-workspace.yaml; else ! grep -q prisma pnpm-workspace.yaml || exit 1; fi
+          if [ "${{ matrix.orm }}" = prisma ]; then grep -q '^  prisma: true' pnpm-workspace.yaml; else grep -q '^  prisma: false' pnpm-workspace.yaml; fi
           pnpm install --frozen-lockfile
       - name: Run Turborepo tasks for the API
         working-directory: ${{ runner.temp }}/mono

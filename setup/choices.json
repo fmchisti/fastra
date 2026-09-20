@@ -51,7 +51,11 @@
         {
           "value": "drizzle",
           "label": "Drizzle",
-          "hint": "SQL-like TypeScript queries, schema in TS"
+          "hint": "SQL-like TypeScript queries, schema in TS",
+          "allowBuilds": {
+            "prisma": false,
+            "@prisma/engines": false
+          }
         },
         {
           "value": "prisma",

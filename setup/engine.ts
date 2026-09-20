@@ -373,7 +373,12 @@ export const allowBuildsFor = (
       : [entry.options[selection[feature] ?? ""]].filter((option) => option !== undefined),
   );
   const merged: Record<string, boolean> = { ...CORE_ALLOW_BUILDS };
-  for (const option of options) Object.assign(merged, option.allowBuilds);
+  // An option that needs a script wins over one that only lists the package to skip it
+  for (const option of options) {
+    for (const [name, allowed] of Object.entries(option.allowBuilds ?? {})) {
+      merged[name] = allowed || merged[name] === true;
+    }
+  }
   return Object.fromEntries(Object.entries(merged).sort(([a], [b]) => a.localeCompare(b)));
 };
 

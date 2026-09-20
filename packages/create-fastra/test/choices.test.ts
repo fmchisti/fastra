@@ -118,6 +118,23 @@ describe("allowBuildsFor", () => {
     });
     expect(allowBuildsFor(choices)).toEqual({ esbuild: false, argon2: true });
   });
+
+  it("lets an option that needs a script win over one that skips it, in either order", () => {
+    const feature = (id: string, allowed: boolean) => ({
+      id,
+      label: id,
+      default: "on",
+      options: [{ value: "on", label: "On", allowBuilds: { prisma: allowed } }],
+    });
+    const answers = { a: "on", b: "on" };
+
+    for (const features of [
+      [feature("a", true), feature("b", false)],
+      [feature("a", false), feature("b", true)],
+    ]) {
+      expect(allowBuildsFor({ ...choices, features }, answers).prisma).toBe(true);
+    }
+  });
 });
 
 describe("toSetupArgs", () => {

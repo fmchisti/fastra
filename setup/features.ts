@@ -31,6 +31,7 @@ export interface OptionManifest {
   /**
    * Dependencies with install scripts: `true` runs the script, `false` skips it. pnpm (10.28+)
    * reads these from `allowBuilds` in pnpm-workspace.yaml and pnpm 11 fails on unlisted ones.
+   * When selected options disagree, `true` wins.
    */
   allowBuilds?: Record<string, boolean>;
   /**
@@ -176,6 +177,10 @@ export const features = {
         ],
         dependencies: ["drizzle-orm"],
         devDependencies: ["drizzle-kit"],
+        // drizzle-orm has @prisma/client as a peer, so a fresh resolution (a monorepo, a deleted
+        // lockfile) installs prisma. Its install scripts are not needed, but pnpm 11 fails on
+        // scripts nobody decided about.
+        allowBuilds: { prisma: false, "@prisma/engines": false },
         env: databaseEnv,
         scripts: {
           "db:generate": "drizzle-kit generate",

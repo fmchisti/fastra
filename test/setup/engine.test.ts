@@ -485,13 +485,22 @@ describe("real features manifest", () => {
 describe("allowBuilds", () => {
   it("approves install scripts only for the selected options", () => {
     const selection = { auth: "none", orm: "drizzle", storage: "none", redis: "none", deploy: "none" };
-    expect(allowBuildsFor(selection)).toEqual({ esbuild: false });
+    expect(allowBuildsFor({ ...selection, orm: "none" })).toEqual({ esbuild: false });
     expect(allowBuildsFor({ ...selection, auth: "firebase", orm: "prisma" })).toEqual({
       "@firebase/util": false,
       "@prisma/engines": true,
       esbuild: false,
       prisma: true,
       protobufjs: false,
+    });
+  });
+
+  it("skips the Prisma peer that drizzle-orm installs", () => {
+    const selection = { auth: "supabase", orm: "drizzle", storage: "none", redis: "none", deploy: "none" };
+    expect(allowBuildsFor(selection)).toEqual({ "@prisma/engines": false, esbuild: false, prisma: false });
+    expect(allowBuildsFor({ ...selection, orm: "prisma" })).toMatchObject({
+      "@prisma/engines": true,
+      prisma: true,
     });
   });
 
