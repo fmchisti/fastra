@@ -322,7 +322,15 @@ export const updatePackageJson = (
   for (const name of dropped.flatMap((entry) => entry.scripts ?? [])) delete scripts[name];
 
   // A generated project is its own package, not a copy of the template's metadata
-  const { repository: _repository, homepage: _homepage, bugs: _bugs, keywords: _keywords, ...rest } = pkg;
+  const {
+    repository: _repository,
+    homepage: _homepage,
+    bugs: _bugs,
+    keywords: _keywords,
+    author: _author,
+    license: _license,
+    ...rest
+  } = pkg;
   const identity = options.projectName
     ? { ...rest, name: options.projectName, version: "0.1.0", description: "" }
     : pkg;

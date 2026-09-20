@@ -376,6 +376,8 @@ describe("project name", () => {
       repository: { url: "git+https://github.com/fmchisti/fastra.git" },
       homepage: "https://github.com/fmchisti/fastra",
       keywords: ["template"],
+      author: "Fahim Mahmud Chisti",
+      license: "MIT",
       scripts: {},
       dependencies: {},
       devDependencies: {},
@@ -393,6 +395,9 @@ describe("project name", () => {
     expect(result).not.toHaveProperty("repository");
     expect(result).not.toHaveProperty("homepage");
     expect(result).not.toHaveProperty("keywords");
+    // The new project is not Fastra's author's, and picks its own license
+    expect(result).not.toHaveProperty("author");
+    expect(result).not.toHaveProperty("license");
   });
 
   it("keeps template metadata when no name is given", () => {

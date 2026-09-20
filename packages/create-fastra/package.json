@@ -34,5 +34,6 @@
   "bugs": {
     "url": "https://github.com/fmchisti/fastra/issues"
   },
-  "license": "ISC"
+  "author": "Fahim Mahmud Chisti",
+  "license": "MIT"
 }
