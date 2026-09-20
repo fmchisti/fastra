@@ -14,7 +14,7 @@ This file is for changes to Fastra, the template itself. `pnpm setup:project` de
 3. **Resolves directives** in `.ts`, `.mts`, `.prisma`, `.md`, `.mdc`, `.yml`, and `Dockerfile` files, and removes the directive comments.
 4. **Rewrites `package.json`**: removes dependencies and scripts owned only by unselected options, sets the selected options' scripts, and removes the setup tool.
 5. **Generates `.env.example`** from `CORE_ENV` plus the selected options' `env`.
-6. Runs `pnpm install`, regenerates the initial migration for the selected schema, creates the public `notes` example when there is a database but no auth, formats with Biome, and type-checks.
+6. Runs `pnpm install`. The lockfile was made with every provider installed, and pnpm keeps a dependency resolved against removed packages while it stays locked (`drizzle-orm` against `@prisma/client`, an optional peer), which would leave Prisma and its engines in a Drizzle project and its Docker image. So setup first drops such dependencies (`dependenciesWithStalePeers`) from the lockfile with one `--lockfile-only` run; every other locked version is kept. The install also deletes the unselected providers from `node_modules` instead of leaving them for pnpm's one-week cache. Then it regenerates the initial migration for the selected schema, creates the public `notes` example when there is a database but no auth, formats with Biome, and type-checks.
 7. Creates `.env` from the new `.env.example` with generated secrets (`scripts/init-env.ts`), unless one exists.
 
 ## Directives
@@ -65,7 +65,7 @@ CI runs the matrix (`setup-matrix` job) and a Docker smoke test for a Drizzle an
 pnpm only runs dependency install scripts listed in `allowBuilds` in `pnpm-workspace.yaml` (`true` runs, `false` skips). pnpm 11 fails the install on unlisted ones and no longer reads the `pnpm` field in `package.json`. pnpm 10.28 is the first release that reads `allowBuilds`.
 
 - Each option lists its own in `setup/features.ts` (`allowBuilds`), and `CORE_ALLOW_BUILDS` covers dependencies every project has. When options disagree, `true` wins.
-- List packages that arrive as peers too: `drizzle-orm` has `@prisma/client` as a peer, so a fresh resolution installs `prisma`, and the Drizzle option lists it as `false`.
+- List packages that can arrive as peers too: `drizzle-orm` has `@prisma/client` as an optional peer, and a lockfile made while Prisma was installed keeps that resolution, so the Drizzle option lists `prisma` as `false`.
 - In a monorepo the create CLI first approves the whole template's list, and after setup sets the entries it added to what the chosen options need (`settleAllowBuilds`). Entries the workspace already had are never changed.
 - The template's `pnpm-workspace.yaml` lists every option's entries. Setup rewrites it with only the selected ones.
 - A dependency update that adds a package with an install script fails pnpm 11 installs until it is listed. The `monorepo` CI job runs pnpm 11 and catches this.

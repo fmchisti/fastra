@@ -1,4 +1,6 @@
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import * as p from "@clack/prompts";
@@ -7,6 +9,7 @@ import { createExampleModule, formatProject, type Runner, regenerateDatabaseArti
 import {
   allowedOptions,
   applySelection,
+  dependenciesWithStalePeers,
   describeSelection,
   findWorkspaceAppDir,
   nextStepsFor,
@@ -37,6 +40,43 @@ ${FEATURE_IDS.map((id) => `  --${id.padEnd(10)} ${Object.keys(features[id].optio
 
 const run = (command: string, args: string[], cwd: string) => {
   execFileSync(command, args, { cwd, stdio: "inherit" });
+};
+
+/**
+ * pnpm keeps a dependency resolved against removed packages (drizzle-orm against @prisma/client, an
+ * optional peer) while that dependency stays in the lockfile, which leaves Prisma and its engines
+ * installed in a Drizzle project. Dropping such dependencies from the lockfile for one
+ * `--lockfile-only` run makes the real install resolve them again. Other locked versions are kept.
+ */
+const unlockStalePeers = async (cwd: string, workspaceAppDir: string | undefined, removed: string[]) => {
+  const lockfileDir = workspaceAppDir
+    ? path.resolve(cwd, ...workspaceAppDir.split("/").map(() => ".."))
+    : cwd;
+  const lockfilePath = path.join(lockfileDir, "pnpm-lock.yaml");
+  if (!existsSync(lockfilePath)) return;
+  const stale = dependenciesWithStalePeers(
+    await readFile(lockfilePath, "utf8"),
+    workspaceAppDir ?? ".",
+    removed,
+  );
+  if (stale.length === 0) return;
+
+  const pkgPath = path.join(cwd, "package.json");
+  const original = await readFile(pkgPath, "utf8");
+  const pkg = JSON.parse(original) as {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  };
+  for (const name of stale) {
+    delete pkg.dependencies?.[name];
+    delete pkg.devDependencies?.[name];
+  }
+  try {
+    await writeFile(pkgPath, JSON.stringify(pkg, null, 2));
+    run("pnpm", ["install", "--lockfile-only", "--no-frozen-lockfile"], cwd);
+  } finally {
+    await writeFile(pkgPath, original);
+  }
 };
 
 const inheritRunner: Runner = async (command, args, options) => {
@@ -184,8 +224,11 @@ const main = async () => {
 
   if (!values["skip-install"]) {
     p.log.step("Installing dependencies");
-    // Setup edits package.json on purpose; CI environments default to a frozen lockfile
-    run("pnpm", ["install", "--no-frozen-lockfile"], cwd);
+    await unlockStalePeers(cwd, workspaceAppDir, result.removedDependencies);
+    // Setup edits package.json on purpose; CI environments default to a frozen lockfile.
+    // pnpm keeps packages nothing depends on any more in node_modules for a week: delete the
+    // unselected providers' (several hundred MB) now.
+    run("pnpm", ["install", "--no-frozen-lockfile", "--config.modules-cache-max-age=0"], cwd);
   }
   if (chosen.orm !== "none") {
     // The initial migration must match the selected schema

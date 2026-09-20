@@ -177,9 +177,9 @@ export const features = {
         ],
         dependencies: ["drizzle-orm"],
         devDependencies: ["drizzle-kit"],
-        // drizzle-orm has @prisma/client as a peer, so a fresh resolution (a monorepo, a deleted
-        // lockfile) installs prisma. Its install scripts are not needed, but pnpm 11 fails on
-        // scripts nobody decided about.
+        // drizzle-orm has @prisma/client as an optional peer. Setup re-resolves it so prisma is not
+        // installed (`unlockStalePeers` in cli.ts), but a lockfile made while prisma was present
+        // (setup with --skip-install) keeps it, and pnpm 11 fails on scripts nobody decided about.
         allowBuilds: { prisma: false, "@prisma/engines": false },
         env: databaseEnv,
         scripts: {
