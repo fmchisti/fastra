@@ -26,7 +26,7 @@ pnpm create fastra gateway --auth none --orm none --storage none --redis none --
 pnpm create fastra apps/api
 ```
 
-The API then uses the workspace's lockfile and pnpm version. Install-script approvals it needs go into `allowBuilds` in the root `pnpm-workspace.yaml`. No nested git repository or `.github/` is created. With Turborepo it also adds `apps/api/turbo.json` (cached `dist/`) and a `check-types` script. Needs pnpm 10.28+.
+The API then uses the workspace's lockfile and pnpm version. Install-script approvals it needs go into `allowBuilds` in the root `pnpm-workspace.yaml`. No nested git repository or `.github/` is created. With Turborepo it also adds `apps/api/turbo.json` (cached `dist/`) and a `check-types` script. The Dockerfile builds from the monorepo root: `docker build -f apps/api/Dockerfile -t api .`. Needs pnpm 10.28+.
 
 | Option | Values |
 |---|---|

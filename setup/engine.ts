@@ -392,14 +392,54 @@ export const renderWorkspaceYaml = (allowBuilds: Record<string, boolean>): strin
 // Apply to a directory
 // ---------------------------------------------------------------------------
 
-const DIRECTIVE_FILE_GLOBS = ["**/*.{ts,mts,prisma,md,mdc,yml,yaml}", "**/Dockerfile", ".cursor/**/*.mdc"];
+const DIRECTIVE_FILE_GLOBS = [
+  "**/*.{ts,mts,prisma,md,mdc,yml,yaml}",
+  "**/Dockerfile",
+  "**/Dockerfile.monorepo",
+  ".cursor/**/*.mdc",
+];
 const IGNORE_GLOBS = ["**/node_modules/**", "**/dist/**", "src/generated/**", ".git/**"];
 
 export interface ApplyOptions {
   removeSetup: boolean;
   /** npm package name for the new project; also used as the README title. */
   projectName?: string | undefined;
+  /**
+   * Set when the project lives in a pnpm workspace: its folder relative to the workspace root
+   * (`apps/api`). The Dockerfile then builds from the workspace root, where the lockfile is.
+   */
+  workspaceAppDir?: string | undefined;
 }
+
+const MONOREPO_DOCKERFILE = "Dockerfile.monorepo";
+
+/**
+ * Folder of `projectDir` relative to the pnpm workspace that contains it (posix, e.g. `apps/api`),
+ * or `undefined` for a standalone project. The project's own pnpm-workspace.yaml does not count.
+ */
+export const findWorkspaceAppDir = (projectDir: string): string | undefined => {
+  const project = path.resolve(projectDir);
+  for (let dir = path.dirname(project); ; dir = path.dirname(dir)) {
+    if (existsSync(path.join(dir, "pnpm-workspace.yaml"))) {
+      return path.relative(dir, project).split(path.sep).join("/");
+    }
+    if (path.dirname(dir) === dir) return undefined;
+  }
+};
+
+/**
+ * A .dockerignore written for the project folder, rewritten for a build context at the workspace
+ * root: every pattern must match at any depth (`node_modules` → all workspace packages').
+ */
+export const toWorkspaceDockerignore = (dockerignore: string): string =>
+  dockerignore
+    .split("\n")
+    .map((line) => {
+      const pattern = line.trim();
+      if (pattern === "" || pattern.startsWith("#")) return line;
+      return pattern.startsWith("!") ? `!**/${pattern.slice(1)}` : `**/${pattern}`;
+    })
+    .join("\n");
 
 export interface ApplyResult {
   removed: string[];
@@ -456,6 +496,26 @@ export const applySelection = async (
     delete railway.deploy?.preDeployCommand;
     await writeFile(railwayPath, `${JSON.stringify(railway, null, 2)}\n`);
   }
+
+  // Inside a pnpm workspace the image is built from the workspace root, where the lockfile is.
+  // Docker reads `<Dockerfile>.dockerignore` for that context instead of the project's .dockerignore.
+  const monorepoDockerfile = path.join(root, MONOREPO_DOCKERFILE);
+  if (options.workspaceAppDir && existsSync(monorepoDockerfile)) {
+    const dockerfile = await readFile(monorepoDockerfile, "utf8");
+    await writeFile(
+      path.join(root, "Dockerfile"),
+      dockerfile.replaceAll("__APP_DIR__", options.workspaceAppDir),
+    );
+    const ignorePath = path.join(root, ".dockerignore");
+    if (existsSync(ignorePath)) {
+      await writeFile(
+        path.join(root, "Dockerfile.dockerignore"),
+        toWorkspaceDockerignore(await readFile(ignorePath, "utf8")),
+      );
+      await rm(ignorePath);
+    }
+  }
+  if (options.removeSetup || options.workspaceAppDir) await rm(monorepoDockerfile, { force: true });
 
   if (options.projectName) {
     const readmePath = path.join(root, "README.md");

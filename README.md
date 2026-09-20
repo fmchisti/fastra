@@ -83,10 +83,8 @@ pnpm turbo run dev --filter=api   # or: pnpm --filter api dev
 - It adds the install-script approvals the API needs (for example Prisma's engines) to `allowBuilds` in the root `pnpm-workspace.yaml`, and leaves your existing entries alone.
 - It does not create a nested git repository, and it removes the API's `.github/`, because GitHub only runs workflows at the repository root.
 - With Turborepo, it adds `apps/api/turbo.json` so cached builds restore `dist/`, plus a `check-types` script.
+- Its Dockerfile builds from the monorepo root, where the lockfile is: `docker build -f apps/api/Dockerfile -t api .`. It installs the API and the workspace packages it depends on, then copies a standalone production build with `pnpm deploy`. The root `package.json` needs a `packageManager` field.
 - It needs pnpm 10.28 or later, the first release that reads `allowBuilds`.
-
-The Dockerfile builds standalone projects only for now: inside a monorepo it cannot see the root lockfile.
-
 
 **With pnpm, step by step** (no GitHub step):
 
@@ -285,6 +283,8 @@ Rate limits are stored in Redis, so they are shared across instances. If Redis i
 
 ### Docker
 
+Inside a pnpm workspace (monorepo), setup writes a different Dockerfile: build it from the workspace root with `docker build -f <path to this project>/Dockerfile -t api .` and follow the commands in its header. Otherwise:
+
 ```bash
 docker build -t api .
 # @setup-if orm!=none
@@ -293,7 +293,7 @@ docker run --rm --env-file .env api pnpm db:migrate:deploy
 docker run --env-file .env -p 3000:3000 api
 ```
 
-Multi-stage image on `node:22-alpine`, production dependencies only, runs as the `node` user, with a `HEALTHCHECK`. It needs `pnpm-lock.yaml` and `pnpm-workspace.yaml` next to it, so it builds standalone projects, not an API inside a monorepo. CI builds the image, runs migrations against Postgres, calls the API, and checks that `docker stop` exits cleanly.
+Multi-stage image on `node:22-alpine`, production dependencies only, runs as the `node` user, with a `HEALTHCHECK`. CI builds the image, runs migrations against Postgres, calls the API, and checks that `docker stop` exits cleanly.
 <!-- @setup-if deploy=railway -->
 
 ### Railway

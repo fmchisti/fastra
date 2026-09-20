@@ -1,0 +1,68 @@
+# syntax=docker/dockerfile:1
+# Production image for an API inside a pnpm workspace. The build needs the workspace's lockfile,
+# so run it from the workspace root:
+#   docker build -f __APP_DIR__/Dockerfile -t api .
+# @setup-if orm=drizzle
+# Migrate:  docker run --rm --env-file __APP_DIR__/.env api node dist/db/drizzle/migrate.js
+# @setup-endif
+# @setup-if orm=prisma
+# Migrate:  docker run --rm --env-file __APP_DIR__/.env api node_modules/.bin/prisma migrate deploy
+# @setup-endif
+# Run:      docker run --env-file __APP_DIR__/.env -p 3000:3000 api
+# Files are excluded from the build context by __APP_DIR__/Dockerfile.dockerignore.
+
+FROM node:22-alpine AS base
+# @setup-if orm=prisma
+# Prisma's schema engine (migrate deploy) needs OpenSSL
+RUN apk add --no-cache openssl
+# @setup-endif
+WORKDIR /app
+
+# ---------------------------------------------------------------------------
+FROM base AS build
+ARG APP_DIR=__APP_DIR__
+ENV PNPM_HOME=/pnpm \
+    COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+ENV PATH=$PNPM_HOME:$PATH
+RUN corepack enable
+WORKDIR /repo
+# pnpm version: `packageManager` in the workspace root's package.json
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN corepack install
+# Download packages using only the lockfile, so this layer is cached until dependencies change
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm fetch
+COPY . .
+# The API and the workspace packages it depends on
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --offline --filter "./${APP_DIR}..."
+RUN pnpm --filter "./${APP_DIR}..." build
+# A standalone copy of the API with production dependencies (workspace packages included)
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store CI=true pnpm --filter "./${APP_DIR}" deploy --prod --legacy /out
+
+# ---------------------------------------------------------------------------
+FROM base AS runtime
+ENV NODE_ENV=production \
+    HOST=0.0.0.0 \
+    PORT=3000
+
+COPY --from=build /out/package.json ./package.json
+COPY --from=build /out/node_modules ./node_modules
+COPY --from=build /out/dist ./dist
+# @setup-if orm=drizzle
+COPY --from=build /out/drizzle ./drizzle
+# @setup-endif
+# @setup-if orm=prisma
+COPY --from=build /out/prisma ./prisma
+COPY --from=build /out/prisma.config.ts ./prisma.config.ts
+# @setup-endif
+# @setup-if storage=local
+# Local uploads need a writable directory; mount a volume here in production
+RUN mkdir -p /app/uploads && chown node:node /app/uploads
+# @setup-endif
+
+USER node
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- "http://127.0.0.1:${PORT}/api/health" > /dev/null || exit 1
+
+# Run node directly (not via pnpm) so SIGTERM reaches the app for graceful shutdown
+CMD ["node", "dist/index.js"]
