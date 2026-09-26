@@ -68,7 +68,7 @@
     "@supabase/supabase-js": "^2.116.0",
     "better-auth": "^1.7.4",
     "drizzle-orm": "^0.45.2",
-    "fastify": "^5.12.4",
+    "fastify": "^5.12.5",
     "fastify-type-provider-zod": "^6.1.0",
     "firebase-admin": "^14.4.0",
     "ioredis": "^5.11.1",
