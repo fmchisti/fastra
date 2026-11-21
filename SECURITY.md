@@ -40,8 +40,8 @@ Creating the project does not run the script. It runs the first time `pnpm build
 in CI, in `docker build`, or in a deploy that builds the project (Railway, Render, Fly, and so on).
 
 The `create-fastra` package on npm was not modified. No version was published during or after the
-incident (the latest is 0.1.7, published 2026-09-20). It is still affected indirectly, because it
-downloads the template from `main` when you run it.
+incident (the latest then was 0.1.7, published 2026-09-20). It was still affected indirectly, because
+versions up to 0.1.7 download the template from `main` when you run them.
 
 ### How to check your project
 
@@ -82,5 +82,6 @@ sends the result to Telegram.
 - The pull request the attacker opened (#37, branch `wfx-docs`) was closed and its branch deleted.
 - The malicious commits stay in the history of `main` as evidence. They are harmless there: the last
   commit of each group removes the file and restores `package.json`.
-- Planned: `create-fastra` should download a tagged release instead of `main`, so that a push to `main`
-  cannot reach new projects.
+- From version 0.1.8, `create-fastra` downloads the template at the exact commit that version was
+  published from, not `main`. A push to `main` no longer reaches new projects; that needs a new npm
+  release, which requires the maintainer's 2FA. Use `pnpm create fastra@latest`.

@@ -42,6 +42,10 @@ The API then uses the workspace's lockfile and pnpm version. Install-script appr
 
 Requires Node.js 22.12+ and pnpm (`corepack enable`).
 
+## Which template you get
+
+Each version of this package creates projects from one fixed commit of [fmchisti/fastra](https://github.com/fmchisti/fastra): the commit it was published from. `pnpm create fastra --help` shows it. Pass `--template gh:fmchisti/fastra#main` to use the latest instead.
+
 ## License
 
 MIT © Fahim Mahmud Chisti

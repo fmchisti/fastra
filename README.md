@@ -120,6 +120,8 @@ pnpm setup:project --name shop-api --auth logto --orm prisma --storage s3 --redi
 
 Run setup in the new project, never in the Fastra repository itself: it deletes the providers you did not choose.
 
+Each `create-fastra` version creates projects from one fixed commit of this repository, not from the latest `main`. Use `pnpm create fastra@latest` to get the newest template.
+
 Projects do not receive later Fastra changes automatically. To pick up a fix, create a fresh project with the same options and port the changed files.
 
 <!-- @setup-endif -->
