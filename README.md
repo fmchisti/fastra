@@ -2,6 +2,10 @@
 
 Type-safe Fastify + TypeScript API.
 <!-- @setup-template-only -->
+
+> [!WARNING]
+> **Security advisory (November 2026).** On 11 and 12 November 2026 a malicious build script was on `main` for five short periods. If you created a project from Fastra on those days, check it: [SECURITY.md](./SECURITY.md) lists the exact times, a one-line check, and what to do.
+
 **Fastra** is a starter for production APIs. Pick your auth provider, database, file storage, Redis, and deploy target once (each can be "none", e.g. for an API that only calls other services), and the setup CLI deletes everything you did not choose.
 <!-- @setup-endif -->
 

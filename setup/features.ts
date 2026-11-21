@@ -334,8 +334,8 @@ export type Selection = { [K in FeatureId]: keyof (typeof features)[K]["options"
 export const FEATURE_IDS = Object.keys(features) as FeatureId[];
 
 /** Always removed after setup unless --keep-setup. */
-// LICENSE is Fastra's own: a generated project chooses its license itself
-export const SETUP_PATHS = ["setup", "test/setup", "docs/template.md", "packages", "LICENSE"];
+// LICENSE and SECURITY.md are Fastra's own: a generated project writes its own
+export const SETUP_PATHS = ["setup", "test/setup", "docs/template.md", "packages", "LICENSE", "SECURITY.md"];
 export const SETUP_DEV_DEPENDENCIES = ["@clack/prompts", "tinyglobby", "giget"];
 export const SETUP_SCRIPTS = ["setup:project", "setup:verify", "setup:choices", "build:create"];
 
