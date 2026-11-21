@@ -563,6 +563,10 @@ describe("allowBuilds", () => {
     );
   });
 
+  it("delays new releases by three days", () => {
+    expect(renderWorkspaceYaml({ esbuild: false })).toMatch(/^minimumReleaseAge: 4320$/m);
+  });
+
   it("matches the template's pnpm-workspace.yaml", async () => {
     const { readFile } = await import("node:fs/promises");
     const file = new URL("../../pnpm-workspace.yaml", import.meta.url);

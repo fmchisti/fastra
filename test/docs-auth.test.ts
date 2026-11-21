@@ -37,6 +37,25 @@ describe("/api/docs protection", () => {
     }
   });
 
+  // Paths that reach the same files in other spellings must not skip the credential check
+  it.each([
+    "/api/docs/",
+    "/api/docs/yaml",
+    "/api/docs/static/index.html",
+    "/api/docs/static/swagger-initializer.js",
+    "/api/docs//static/index.html",
+    "/api/docs/static/../static/index.html",
+    "/api/docs/static/%2e%2e/static/index.html",
+    "/api/docs/static/..%2fstatic/index.html",
+    "/api/docs/%73tatic/index.html",
+    "/api/docs/static/index.html?x=/api/health",
+  ])("never serves %s without credentials", async (url) => {
+    const response = await app().inject({ method: "GET", url });
+
+    expect(response.statusCode).not.toBe(200);
+    expect(response.body).not.toContain("swagger");
+  });
+
   it("serves the OpenAPI spec with valid credentials", async () => {
     const response = await app().inject({
       method: "GET",

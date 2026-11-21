@@ -398,12 +398,22 @@ export const allowBuildsFor = (
 
 const yamlKey = (name: string) => (/^[a-z0-9][\w.-]*$/i.test(name) ? name : `"${name}"`);
 
-/** pnpm-workspace.yaml of a standalone project: which dependencies may run install scripts. */
+/** Minutes a version must have been public before pnpm installs it (3 days). */
+export const MINIMUM_RELEASE_AGE_MINUTES = 4320;
+
+/**
+ * pnpm-workspace.yaml of a standalone project: which dependencies may run install scripts, and
+ * how old a release must be before it is installed.
+ */
 export const renderWorkspaceYaml = (allowBuilds: Record<string, boolean>): string =>
   [
     "# Dependencies allowed to run install scripts (true) or skipped (false). Needs pnpm 10.28+.",
     "allowBuilds:",
     ...Object.entries(allowBuilds).map(([name, allowed]) => `  ${yamlKey(name)}: ${allowed}`),
+    "",
+    "# Do not install a version until it has been public for 3 days (in minutes). Most malicious",
+    "# releases are caught and removed within that time. Needs pnpm 10.16+.",
+    `minimumReleaseAge: ${MINIMUM_RELEASE_AGE_MINUTES}`,
     "",
   ].join("\n");
 

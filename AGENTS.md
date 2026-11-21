@@ -184,9 +184,10 @@ It creates every file below with one example call, registers them at the `// @ge
 - Validate all input with Zod schemas on the route; never read `request.body` without one. Validate upstream API responses too.
 - No secrets in code, logs, tests, or committed files. Read them through validated env.
 - Use `request.ip` (respects `TRUST_PROXY`); never read `x-forwarded-for` yourself.
+- GitHub Actions are pinned to commit SHAs with the version in a comment. Keep that form when adding an action; Dependabot updates both.
 - Keep helmet, CORS (`CORS_ORIGINS`), and rate limiting on. Add stricter limits on expensive or sensitive routes: `config: { rateLimit: { max: 5, timeWindow: "1 minute" } }`.
 - File uploads: server-generated keys, content-type allowlist, size limit, owner checks (see `src/modules/files/` when present).
-- New dependency: prefer well-maintained packages already in the stack, and say why in the PR. If pnpm reports ignored build scripts, list the package under `allowBuilds` in `pnpm-workspace.yaml` (`true` only if it needs its install script, `false` otherwise). Inside a monorepo, that file is at the monorepo root.
+- New dependency: prefer well-maintained packages already in the stack, and say why in the PR. pnpm installs a version only after it has been public for 3 days (`minimumReleaseAge` in `pnpm-workspace.yaml`); do not lower it to get a release sooner. If pnpm reports ignored build scripts, list the package under `allowBuilds` in `pnpm-workspace.yaml` (`true` only if it needs its install script, `false` otherwise). Inside a monorepo, that file is at the monorepo root.
 
 ### Env and config
 - Core variables: `src/config/env.ts`. Provider or module variables: validate where used with `loadEnv(schema)`, so only what the project uses is required.
