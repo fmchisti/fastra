@@ -4,6 +4,8 @@
 Object.assign(process.env, {
   NODE_ENV: "test",
   LOG_LEVEL: "silent",
+  // Readiness tests flip dependencies between requests
+  HEALTH_CACHE_SECONDS: "0",
   // @setup-if orm!=none
   DATABASE_URL: "postgresql://test:test@localhost:5432/test",
   // @setup-endif

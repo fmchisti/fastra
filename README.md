@@ -276,8 +276,9 @@ Every change should end with `pnpm verify`.
 
 Built in:
 - **Graceful shutdown**: on SIGTERM, stops accepting connections, finishes in-flight requests (up to `SHUTDOWN_TIMEOUT_SECONDS`), closes connections, exits 0.
-- **Health checks**: `/api/health` (liveness) and `/api/health/ready` (database, and Redis when used), never rate limited.
-- **Security headers** (`@fastify/helmet`), **CORS** from `CORS_ORIGINS`, **rate limiting** per client IP (`RATE_LIMIT_MAX` per `RATE_LIMIT_WINDOW`).
+- **Health checks**: `/api/health` (liveness) and `/api/health/ready` (database, and Redis when used), never rate limited. Readiness reuses its result for `HEALTH_CACHE_SECONDS` (5) and gives each dependency 3 seconds, so calling it in a loop puts no load on the database.
+- **Bounded waits**: a client has `REQUEST_TIMEOUT_SECONDS` (60) to send a request; a request waits at most `DATABASE_CONNECT_TIMEOUT_SECONDS` (5) for a database connection; Postgres cancels statements after `DATABASE_STATEMENT_TIMEOUT_SECONDS` (30).
+- **Security headers** (`@fastify/helmet`), **CORS** from `CORS_ORIGINS`, **rate limiting** per client IP (`RATE_LIMIT_MAX` per `RATE_LIMIT_WINDOW`), including requests to URLs that do not exist.
 - **`TRUST_PROXY=true`** behind Railway, Render, Fly, or a load balancer, so client IPs (rate limits, auth logs) are real, or list the proxy IPs/CIDRs (`10.0.0.0/8`). Leave `false` when exposed directly. Hop counts (`TRUST_PROXY=1`) are rejected at startup: Fastify ignores them.
 - **Request IDs**: `x-request-id` is accepted from your proxy or generated, returned on every response, and logged as `requestId`. Authorization and cookie headers are redacted from logs.
 - **API docs** are off in production unless `DOCS_ENABLED=true` (protect them with `DOCS_USERNAME`/`DOCS_PASSWORD`).

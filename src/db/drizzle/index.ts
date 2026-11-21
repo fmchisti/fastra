@@ -1,6 +1,6 @@
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
-import pg from "pg";
 import { loadDatabaseEnv } from "../env.ts";
+import { createPool, type PoolSettings, toPoolSettings } from "../pool.ts";
 import type { Database } from "../types.ts";
 import * as schema from "./schema/index.ts";
 
@@ -9,9 +9,9 @@ export type AppDatabase = Database<DrizzleClient>;
 
 export const createDatabase = (
   connectionString: string = loadDatabaseEnv().DATABASE_URL,
-  poolOptions: pg.PoolConfig = { max: loadDatabaseEnv().DATABASE_POOL_MAX },
+  poolOptions: PoolSettings = toPoolSettings(loadDatabaseEnv()),
 ): AppDatabase => {
-  const pool = new pg.Pool({ connectionString, ...poolOptions });
+  const pool = createPool(connectionString, poolOptions);
   const client = drizzle(pool, { schema });
 
   return {

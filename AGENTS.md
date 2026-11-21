@@ -69,7 +69,7 @@ docs/providers.md      Provider details and how to add one
 - `src/auth/`: AuthProvider interface (`types.ts`), `middleware.ts`, `providers/<name>/`. Adds `request.user` and `app.auth` types.
 <!-- @setup-endif -->
 <!-- @setup-if orm!=none -->
-- `src/db/`: Database interface (`types.ts`), `env.ts`, `index.ts` re-exporting the selected ORM, `<orm>/` client and schema. Migrations in `drizzle/` or `prisma/` (commit them; never edit an applied one). `src/lib/crud.ts`: repository types.
+- `src/db/`: Database interface (`types.ts`), `env.ts`, `pool.ts` (the node-postgres pool both ORMs use: size, connection wait, statement limit), `index.ts` re-exporting the selected ORM, `<orm>/` client and schema. Migrations in `drizzle/` or `prisma/` (commit them; never edit an applied one). `src/lib/crud.ts`: repository types.
 - `scripts/gen-module.ts`, `scripts/gen-field.ts`, `scripts/gen-remove.ts`: `pnpm gen:module`, `pnpm gen:field`, `pnpm gen:remove`. `test/repositories/`: contract tests on in-process Postgres (PGlite) and ORM harnesses.
 <!-- @setup-endif -->
 <!-- @setup-if orm=prisma -->
@@ -222,7 +222,8 @@ It creates every file below with one example call, registers them at the `// @ge
 
 ### Lifecycle
 - Anything holding connections (clients, pools) is created in `container.ts` and closed in the `onClose` hook in `app.ts` or the provider's `close()`, so graceful shutdown works.
-- Health checks (`/api/health`, `/api/health/ready`) are never rate limited. A new external dependency adds a check to `/api/health/ready` in `app.ts`.
+- Health checks (`/api/health`, `/api/health/ready`) are never rate limited. A new external dependency adds a check to `/api/health/ready` in `app.ts`. Checks run at most once per `HEALTH_CACHE_SECONDS` and time out after 3 seconds, so keep them to one cheap call.
+- Nothing waits forever: requests (`REQUEST_TIMEOUT_SECONDS`), database connections and statements (`DATABASE_CONNECT_TIMEOUT_SECONDS`, `DATABASE_STATEMENT_TIMEOUT_SECONDS`), and calls to other services (pass a timeout, as generated clients do).
 
 ## Testing
 

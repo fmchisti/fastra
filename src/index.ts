@@ -19,6 +19,12 @@ const main = async (): Promise<void> => {
   process.on("uncaughtException", (error) => void shutdown("uncaughtException", error));
   process.on("unhandledRejection", (error) => void shutdown("unhandledRejection", error));
 
+  if (process.env.NODE_ENV === undefined) {
+    app.log.warn(
+      "NODE_ENV is not set, so this runs as development: API docs are on and localhost origins are allowed by CORS. Set NODE_ENV=production in production.",
+    );
+  }
+
   await app.listen({ port: env.PORT, host: env.HOST });
 };
 

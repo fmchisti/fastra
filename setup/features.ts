@@ -71,6 +71,16 @@ const databaseEnv: EnvEntry[] = [
       "Docker: pnpm db:up. Railway: ${{Postgres.DATABASE_URL}}. Supabase: Project Settings > Database > Connection string",
   },
   { key: "DATABASE_POOL_MAX", example: "10", comment: "Max DB connections per instance" },
+  {
+    key: "DATABASE_CONNECT_TIMEOUT_SECONDS",
+    example: "5",
+    comment: "Fail a request that waits longer than this for a free connection",
+  },
+  {
+    key: "DATABASE_STATEMENT_TIMEOUT_SECONDS",
+    example: "30",
+    comment: "Postgres cancels a statement that runs longer. 0 = no limit",
+  },
 ];
 
 const files = {
@@ -351,6 +361,7 @@ export const CONDITIONAL: ConditionalManifest[] = [
       "src/db",
       "test/fakes/database.ts",
       "test/postgres.ts",
+      "test/repositories/pool.test.ts",
       "scripts/gen-module.ts",
       "scripts/gen-field.ts",
       "scripts/gen-remove.ts",
@@ -427,6 +438,16 @@ export const CORE_ENV: EnvEntry[] = [
     key: "SHUTDOWN_TIMEOUT_SECONDS",
     example: "10",
     comment: "Grace period for in-flight requests on SIGTERM",
+  },
+  {
+    key: "REQUEST_TIMEOUT_SECONDS",
+    example: "60",
+    comment: "Time a client has to send a complete request. Raise for large uploads on slow links",
+  },
+  {
+    key: "HEALTH_CACHE_SECONDS",
+    example: "5",
+    comment: "/api/health/ready reuses its result this long, so probes cannot load the database",
   },
   { key: "DOCS_ENABLED", example: "", comment: "Swagger UI at /api/docs. Default: on, except in production" },
   { key: "DOCS_USERNAME", example: "", comment: "When both set, /api/docs requires HTTP Basic Auth" },
