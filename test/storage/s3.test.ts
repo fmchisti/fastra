@@ -67,10 +67,11 @@ describe("S3 storage provider", () => {
     });
   });
 
-  it("creates a presigned PUT URL bound to the content type", async () => {
+  it("creates a presigned PUT URL bound to the content type and the exact size", async () => {
     const upload = await storage.createUploadUrl?.({
       key: "u1/a.png",
       contentType: "image/png",
+      contentLength: 1234,
       expiresInSeconds: 60,
     });
 
@@ -78,7 +79,10 @@ describe("S3 storage provider", () => {
     const url = new URL(upload?.url ?? "");
     expect(url.pathname).toContain("u1/a.png");
     expect(url.searchParams.get("X-Amz-Expires")).toBe("60");
-    expect(url.searchParams.get("X-Amz-SignedHeaders")).toContain("content-type");
+    // S3 rejects a request whose signed headers differ: another type or another size
+    expect(url.searchParams.get("X-Amz-SignedHeaders")?.split(";")).toEqual(
+      expect.arrayContaining(["content-type", "content-length"]),
+    );
     expect(upload?.headers).toEqual({ "content-type": "image/png" });
   });
 });

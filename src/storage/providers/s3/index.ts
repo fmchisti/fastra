@@ -66,12 +66,18 @@ export const createS3Storage = ({ client, bucket }: S3StorageOptions): StoragePr
     await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
   },
 
-  createUploadUrl: async ({ key, contentType, expiresInSeconds }) => {
+  createUploadUrl: async ({ key, contentType, contentLength, expiresInSeconds }) => {
     const url = await getSignedUrl(
       client,
-      new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: contentType }),
-      // Sign content-type so the client cannot upload a different type than was approved
-      { expiresIn: expiresInSeconds, signableHeaders: new Set(["content-type"]) },
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        ContentType: contentType,
+        ContentLength: contentLength,
+      }),
+      // Sign type and size, so the URL cannot be used for another type or a larger file.
+      // Without the size, one URL accepts up to 5 GB.
+      { expiresIn: expiresInSeconds, signableHeaders: new Set(["content-type", "content-length"]) },
     );
     return {
       url,

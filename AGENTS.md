@@ -162,7 +162,7 @@ It creates every file below with one example call, registers them at the `// @ge
 
 ### API conventions
 - All routes under `/api`. Every route has a Zod schema (including `response`) and docs, so `/api/docs` stays accurate.
-- `POST` → 201 with the created resource. `PATCH` → partial update, 200. `DELETE` → 204, no body. Lists → `{ items, page, pageSize, total, totalPages }` via `paginatedSchema` and `PaginationQuerySchema`.
+- `POST` → 201 with the created resource. `PATCH` → partial update, 200. `DELETE` → 204, no body. Lists → `{ items, page, pageSize, total, totalPages }` via `paginatedSchema` and `PaginationQuerySchema` (`pageSize` ≤ 100, `page` ≤ `MAX_PAGE`: deep offsets are expensive, so deeper lists need filters or keyset paging).
 - Errors: throw `new HttpError(status, message)`. The global handler returns `{ error, message, details? }`, adds validation `details`, and hides messages on 5xx. Document error codes with `ErrorResponseSchema`.
 - Never catch errors just to send a response. Catch only to translate a known failure into an `HttpError` or to clean up.
 - Dates are `Date` in code (`z.date()` in responses) and ISO strings in JSON. IDs are UUIDs validated with `z.uuid()`.
@@ -186,7 +186,7 @@ It creates every file below with one example call, registers them at the `// @ge
 - Use `request.ip` (respects `TRUST_PROXY`); never read `x-forwarded-for` yourself.
 - GitHub Actions are pinned to commit SHAs with the version in a comment. Keep that form when adding an action; Dependabot updates both.
 - Keep helmet, CORS (`CORS_ORIGINS`), and rate limiting on. Add stricter limits on expensive or sensitive routes: `config: { rateLimit: { max: 5, timeWindow: "1 minute" } }`.
-- File uploads: server-generated keys, content-type allowlist, size limit, owner checks (see `src/modules/files/` when present).
+- File uploads: server-generated keys, content-type allowlist, size limit (also signed into presigned URLs), their own rate limit, owner checks (see `src/modules/files/` when present).
 - New dependency: prefer well-maintained packages already in the stack, and say why in the PR. pnpm installs a version only after it has been public for 3 days (`minimumReleaseAge` in `pnpm-workspace.yaml`); do not lower it to get a release sooner. If pnpm reports ignored build scripts, list the package under `allowBuilds` in `pnpm-workspace.yaml` (`true` only if it needs its install script, `false` otherwise). Inside a monorepo, that file is at the monorepo root.
 
 ### Env and config

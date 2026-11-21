@@ -19,7 +19,9 @@ export type UploadedFile = z.infer<typeof UploadedFileSchema>;
 
 export const CreateUploadUrlBodySchema = z.object({
   filename: z.string().min(1).max(255),
-  contentType: z.string().min(1),
+  contentType: z.string().min(1).max(255),
+  // Exact size of the file in bytes. The upload URL only accepts a body of this size.
+  size: z.number().int().positive(),
 });
 
 export const UploadUrlResponseSchema = z.object({
@@ -56,6 +58,7 @@ export const CreateUploadUrlSchema = {
   body: CreateUploadUrlBodySchema,
   response: {
     200: UploadUrlResponseSchema,
+    413: ErrorResponseSchema,
     415: ErrorResponseSchema,
     501: ErrorResponseSchema,
     ...commonErrors,

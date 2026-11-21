@@ -10,6 +10,8 @@ export interface FilesConfig {
   /** Exact types (`image/png`) or wildcards (`image/*`). */
   allowedContentTypes: string[];
   uploadUrlExpiresInSeconds: number;
+  /** Uploads, and upload URLs, one client may request per minute (each has its own count). */
+  uploadsPerMinute: number;
 }
 
 const SAFE_OWNER = /^[A-Za-z0-9_-]{1,128}$/;
@@ -40,7 +42,7 @@ export interface FilesService {
   delete(userId: string, key: string): Promise<void>;
   createUploadUrl(
     userId: string,
-    input: { filename: string; contentType: string },
+    input: { filename: string; contentType: string; size: number },
   ): Promise<PresignedUpload & { key: string }>;
 }
 
@@ -89,15 +91,19 @@ export const createFilesService = (storage: StorageProvider, config: FilesConfig
       await storage.delete(key);
     },
 
-    createUploadUrl: async (userId, { filename, contentType }) => {
+    createUploadUrl: async (userId, { filename, contentType, size }) => {
       if (!storage.createUploadUrl) {
         throw new HttpError(501, `Storage provider "${storage.name}" does not support upload URLs`);
       }
       assertAllowed(contentType);
+      if (size > config.maxFileSizeBytes) {
+        throw new HttpError(413, `File exceeds ${config.maxFileSizeBytes} bytes`);
+      }
       const key = buildKey(userId, filename);
       const upload = await storage.createUploadUrl({
         key,
         contentType,
+        contentLength: size,
         expiresInSeconds: config.uploadUrlExpiresInSeconds,
       });
       return { key, ...upload };

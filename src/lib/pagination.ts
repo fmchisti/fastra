@@ -1,7 +1,14 @@
 import { z } from "zod";
 
+/**
+ * Highest page a list accepts. Postgres reads and discards every skipped row, so an unbounded
+ * `?page=` is an easy way to make one request expensive. To go deeper, narrow the list with
+ * filters or search, or page by key (`where created_at < :last`).
+ */
+export const MAX_PAGE = 500;
+
 export const PaginationQuerySchema = z.object({
-  page: z.coerce.number<string>().int().min(1).default(1),
+  page: z.coerce.number<string>().int().min(1).max(MAX_PAGE).default(1),
   pageSize: z.coerce.number<string>().int().min(1).max(100).default(20),
 });
 

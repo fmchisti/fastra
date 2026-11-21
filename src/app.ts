@@ -43,7 +43,12 @@ export const buildApp = async (
     trustProxy: env.TRUST_PROXY,
     requestTimeout: env.REQUEST_TIMEOUT_SECONDS * 1000,
     genReqId: generateRequestId,
-    logController: new LogController({ requestIdLogLabel: "requestId" }),
+    logController: new LogController({
+      requestIdLogLabel: "requestId",
+      // Probes call these every few seconds: two log lines each is paid-for noise.
+      // Failed readiness checks are still logged by the route.
+      disableRequestLogging: (request) => request.url.startsWith("/api/health"),
+    }),
   }).withTypeProvider<ZodTypeProvider>();
   const deps = createDependencies(overrides, { corsOrigins: corsOrigins(env) });
 
