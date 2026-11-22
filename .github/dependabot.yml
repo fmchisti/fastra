@@ -6,6 +6,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Wait before proposing a new release: most malicious npm versions are removed within days.
+    # Same delay as `minimumReleaseAge` in pnpm-workspace.yaml.
+    cooldown:
+      default-days: 3
     groups:
       # Released together; mixed versions do not work
       prisma:

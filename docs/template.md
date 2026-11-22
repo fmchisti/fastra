@@ -60,6 +60,12 @@ Each combination is applied to a temporary copy (sharing `node_modules`). Then i
 
 CI runs the matrix (`setup-matrix` job) and a Docker smoke test for a Drizzle and a Prisma + Redis project (`docker` job) on every pull request.
 
+## Supply chain settings
+
+- `minimumReleaseAge: 4320` in `pnpm-workspace.yaml` (written by `renderWorkspaceYaml`, so generated projects have it too): pnpm does not install a version younger than 3 days. `.github/dependabot.yml` has the same `cooldown`, so Dependabot does not propose versions pnpm would refuse.
+- CI actions are pinned to commit SHAs, and `actions/checkout` runs with `persist-credentials: false`.
+- Inside a monorepo the root `pnpm-workspace.yaml` belongs to the workspace: setup does not add `minimumReleaseAge` there.
+
 ## Install scripts (`allowBuilds`)
 
 pnpm only runs dependency install scripts listed in `allowBuilds` in `pnpm-workspace.yaml` (`true` runs, `false` skips). pnpm 11 fails the install on unlisted ones and no longer reads the `pnpm` field in `package.json`. pnpm 10.28 is the first release that reads `allowBuilds`.

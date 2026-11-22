@@ -5,3 +5,7 @@ allowBuilds:
   esbuild: false
   prisma: true
   protobufjs: false
+
+# Do not install a version until it has been public for 3 days (in minutes). Most malicious
+# releases are caught and removed within that time. Needs pnpm 10.16+.
+minimumReleaseAge: 4320
