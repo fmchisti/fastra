@@ -1,6 +1,6 @@
 {
   "name": "create-fastra",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Create a type-safe Fastify API from Fastra: pick auth, ORM, storage, and Redis, get a clean project.",
   "type": "module",
   "bin": {
@@ -9,6 +9,9 @@
   "files": [
     "dist"
   ],
+  "scripts": {
+    "prepublishOnly": "node scripts/pin-template.mjs"
+  },
   "dependencies": {
     "@clack/prompts": "^1.8.1",
     "giget": "^3.3.1"

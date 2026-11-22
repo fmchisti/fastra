@@ -3,8 +3,15 @@ import { existsSync } from "node:fs";
 import { cp, readdir } from "node:fs/promises";
 import path from "node:path";
 import { downloadTemplate } from "giget";
+import { TEMPLATE_COMMIT } from "./template-ref.ts";
 
-export const DEFAULT_TEMPLATE = "gh:fmchisti/fastra";
+export const TEMPLATE_REPOSITORY = "gh:fmchisti/fastra";
+
+/** The template at the commit this version was published from; `main` for an unpublished build. */
+export const templateSource = (commit: string | null): string =>
+  commit ? `${TEMPLATE_REPOSITORY}#${commit}` : TEMPLATE_REPOSITORY;
+
+export const DEFAULT_TEMPLATE = templateSource(TEMPLATE_COMMIT);
 
 export const HELP = `
 Create a new API from Fastra (https://github.com/fmchisti/fastra).
@@ -19,8 +26,9 @@ Examples:
   pnpm create fastra apps/api     (from a monorepo root: uses the workspace's lockfile and settings)
 
 Options:
-  --template <source>  Template to download (default: ${DEFAULT_TEMPLATE}).
-                       A branch or tag: gh:fmchisti/fastra#v1.0.0. A local folder: ./fastra
+  --template <source>  Template to download. Default: Fastra at the commit this version of
+                       create-fastra was published from (${TEMPLATE_COMMIT?.slice(0, 7) ?? "main, unpublished build"}).
+                       Another branch, tag, or commit: ${TEMPLATE_REPOSITORY}#main. A local folder: ./fastra
   --no-git             Do not create a git repository and initial commit
                        (skipped anyway inside an existing git repository)
   -h, --help           Show this help

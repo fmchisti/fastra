@@ -9,8 +9,20 @@ import {
   fetchTemplate,
   parseCliArgs,
   shouldSkip,
+  templateSource,
   toSafeDirectoryName,
 } from "../src/cli.ts";
+
+describe("templateSource", () => {
+  it("pins a published build to one commit and leaves an unpublished build on main", () => {
+    expect(templateSource("0123456789abcdef0123456789abcdef01234567")).toBe(
+      "gh:fmchisti/fastra#0123456789abcdef0123456789abcdef01234567",
+    );
+    expect(templateSource(null)).toBe("gh:fmchisti/fastra");
+    // Source files are never pinned: only `npm publish` writes the commit, into dist/
+    expect(DEFAULT_TEMPLATE).toBe("gh:fmchisti/fastra");
+  });
+});
 
 describe("parseCliArgs", () => {
   it("reads the directory and forwards setup options", () => {

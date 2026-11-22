@@ -93,25 +93,28 @@ After changing `setup/features.ts`, run `pnpm setup:choices` to rewrite `setup/c
 Inside any existing git repository (monorepo or not) it skips `git init` and deletes the project's `.github/`.
 
 - Code: `src/cli.ts` (argument parsing, target checks, template fetching), `src/monorepo.ts` (workspace detection and root file edits), and `src/index.ts` (the interactive flow). Tests: `packages/create-fastra/test/`, run by the root `pnpm test`.
-- `--template` accepts a giget source (`gh:fmchisti/fastra#v1.0.0`) or a local folder, which CI uses to test the current commit.
+- `--template` accepts a giget source (`gh:fmchisti/fastra#main`, a tag, or a commit) or a local folder, which CI uses to test the current commit. The default is the pinned commit (see Publishing).
 - CI job `create-fastra` builds and packs the package like `npm publish`, creates a project from the checkout with `pnpm dlx`, and checks it (name, no setup files, clean git tree, check/type-check/test).
 - CI job `monorepo` does the same inside a fresh Turborepo on pnpm 10.28 and pnpm 11. It checks the root files, runs `turbo run build lint check-types test` and a cached rebuild, then builds the Docker image from the monorepo root, runs migrations in it, waits for readiness, and checks that `docker stop` exits 0. It installs without the template's lockfile, so newer dependency versions are tested too.
 - CI job `latest-dependencies` type-checks and tests the template with the newest versions its ranges allow, which is what a monorepo installs.
 
 ### Publishing
 
-Publishing needs an npm account with 2FA (npm asks for the authenticator code):
+A published version of the CLI creates projects from **one commit**: the commit it was published from. `npm publish` runs `scripts/pin-template.mjs` (`prepublishOnly`), which refuses to publish unless the working tree is clean and `HEAD` is `origin/main`, builds the CLI, and writes that commit into `dist/template-ref.js`. So:
+
+- A push to `main` does not reach new projects. Template changes ship with the next CLI version.
+- Someone who can push to the repository cannot change what `pnpm create fastra` installs without also publishing to npm, which needs the maintainer's 2FA.
+
+To release (npm asks for the authenticator code):
 
 ```bash
-pnpm install
-pnpm build:create
+git checkout main && git pull
+# bump "version" in packages/create-fastra/package.json through a pull request first
 npm login
 (cd packages/create-fastra && npm publish --access public)
 ```
 
-Then anyone can run `pnpm create fastra my-api` (or `npm create fastra@latest my-api`).
-
-For a new CLI release, bump `version` in `packages/create-fastra/package.json`, build, and publish it. The CLI downloads the template from `main` at run time, so template changes need no new package version.
+Check the result with `npx create-fastra@latest --help`: the `--template` line shows the pinned commit. An unpublished build (`pnpm build:create`) is not pinned and uses `main`.
 
 ## Checklist for template changes
 
