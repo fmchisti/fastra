@@ -29,8 +29,8 @@ export const createMemoryStorage = (options: { presign?: boolean } = {}): Memory
       objects.delete(key);
     },
     ...(options.presign && {
-      createUploadUrl: async ({ key, contentType, expiresInSeconds }) => ({
-        url: `https://bucket.example.com/${key}?signature=fake`,
+      createUploadUrl: async ({ key, contentType, contentLength, expiresInSeconds }) => ({
+        url: `https://bucket.example.com/${key}?size=${contentLength}&signature=fake`,
         method: "PUT" as const,
         headers: { "content-type": contentType },
         expiresAt: new Date(Date.now() + expiresInSeconds * 1000),

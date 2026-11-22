@@ -22,6 +22,9 @@ const filesEnvSchema = z.object({
         .filter(Boolean),
     ),
   UPLOAD_URL_EXPIRES_IN_SECONDS: z.coerce.number<string>().int().positive().default(300),
+  // Per client per minute, for uploads and for upload URLs (counted separately). The general
+  // limit (RATE_LIMIT_MAX) would allow gigabytes per minute.
+  UPLOAD_RATE_LIMIT_MAX: z.coerce.number<string>().int().positive().default(20),
 });
 
 export const loadFilesConfig = (source: NodeJS.ProcessEnv = process.env): FilesConfig => {
@@ -30,6 +33,7 @@ export const loadFilesConfig = (source: NodeJS.ProcessEnv = process.env): FilesC
     maxFileSizeBytes: Math.floor(env.UPLOAD_MAX_FILE_SIZE_MB * 1024 * 1024),
     allowedContentTypes: env.UPLOAD_ALLOWED_CONTENT_TYPES,
     uploadUrlExpiresInSeconds: env.UPLOAD_URL_EXPIRES_IN_SECONDS,
+    uploadsPerMinute: env.UPLOAD_RATE_LIMIT_MAX,
   };
 };
 
@@ -51,9 +55,13 @@ const fileRoutes: FastifyPluginAsyncZod<FileRoutesOptions> = async (fastify, opt
   });
   fastify.addHook("onRequest", authenticate);
 
+  // Each way to add a file gets its own small budget per client
+  const uploadLimit = { rateLimit: { max: config.uploadsPerMinute, timeWindow: "1 minute" } };
+
   fastify.route({
     method: "POST",
     url: "/files",
+    config: uploadLimit,
     schema: { ...UploadFileSchema, ...docs.uploadFileDocs },
     handler: handlers.upload,
   });
@@ -61,6 +69,7 @@ const fileRoutes: FastifyPluginAsyncZod<FileRoutesOptions> = async (fastify, opt
   fastify.route({
     method: "POST",
     url: "/files/upload-url",
+    config: uploadLimit,
     schema: { ...CreateUploadUrlSchema, ...docs.createUploadUrlDocs },
     handler: handlers.createUploadUrl,
   });

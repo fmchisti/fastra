@@ -3,6 +3,7 @@ import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "fas
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { ErrorResponseSchema, errorHandler, HttpError, notFoundHandler } from "../src/lib/errors.ts";
+import { MAX_PAGE, PaginationQuerySchema } from "../src/lib/pagination.ts";
 import { useTestApp } from "./helpers.ts";
 
 const buildErrorApp = async (): Promise<FastifyInstance> => {
@@ -105,5 +106,16 @@ describe("not found handler", () => {
       error: "Not Found",
       message: "Route GET /nope not found",
     });
+  });
+});
+
+describe("pagination limits", () => {
+  it("accepts pages up to the maximum and rejects deeper or oversized ones", () => {
+    expect(PaginationQuerySchema.parse({})).toEqual({ page: 1, pageSize: 20 });
+    expect(PaginationQuerySchema.parse({ page: String(MAX_PAGE), pageSize: "100" }).page).toBe(MAX_PAGE);
+    // A huge offset makes Postgres read and discard every skipped row
+    expect(PaginationQuerySchema.safeParse({ page: String(MAX_PAGE + 1) }).success).toBe(false);
+    expect(PaginationQuerySchema.safeParse({ page: "1000000" }).success).toBe(false);
+    expect(PaginationQuerySchema.safeParse({ pageSize: "101" }).success).toBe(false);
   });
 });

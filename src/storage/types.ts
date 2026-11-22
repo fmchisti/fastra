@@ -37,6 +37,8 @@ export interface StorageProvider {
   createUploadUrl?(input: {
     key: string;
     contentType: string;
+    /** Exact size in bytes. The URL must only accept an upload of this size. */
+    contentLength: number;
     expiresInSeconds: number;
   }): Promise<PresignedUpload>;
 }

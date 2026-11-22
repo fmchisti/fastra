@@ -38,6 +38,7 @@ Self-hosted. Users, sessions, accounts, and verification tokens live in your Pos
   curl -s localhost:3000/api/todos -H "authorization: Bearer <token from the header above>"
   ```
   The same token works in Swagger UI (`/api/docs` → **Authorize**).
+- Cost: every authenticated request reads the session from Postgres. To cut those reads, enable `session.cookieCache` in `buildAuth()` (browsers only; a revoked session stays valid until the cache expires), or pass the Redis client as `secondaryStorage` when the project has Redis.
 - Social login, email verification, 2FA, organizations: add to `buildAuth()` in `src/auth/providers/better-auth/index.ts`. Plugins that add tables need the schema updated (`npx @better-auth/cli generate`) in both the ORM schema and a new migration.
 <!-- @setup-endif -->
 
@@ -131,18 +132,20 @@ interface StorageProvider {
   put({ key, body, contentType }): Promise<void>;
   get(key): Promise<{ body: Readable; contentType; contentLength } | null>;
   delete(key): Promise<void>;
-  createUploadUrl?({ key, contentType, expiresInSeconds }): Promise<PresignedUpload>; // optional
+  createUploadUrl?({ key, contentType, contentLength, expiresInSeconds }): Promise<PresignedUpload>; // optional
 }
 ```
 
-The files module (`/api/files`) generates keys as `<userId>/<uuid>.<ext>`, allows only the owner to read or delete, restricts content types (`UPLOAD_ALLOWED_CONTENT_TYPES`), limits size (`UPLOAD_MAX_FILE_SIZE_MB`), and serves non-image files as downloads with `nosniff`.
+The files module (`/api/files`) generates keys as `<userId>/<uuid>.<ext>`, allows only the owner to read or delete, restricts content types (`UPLOAD_ALLOWED_CONTENT_TYPES`), limits size (`UPLOAD_MAX_FILE_SIZE_MB`) and how often a client may upload (`UPLOAD_RATE_LIMIT_MAX` per minute, for uploads and for upload URLs), and serves non-image files as downloads with `nosniff`.
 <!-- @setup-endif -->
 
 <!-- @setup-if storage=s3 -->
 ### S3-compatible
 
 - Env: `S3_BUCKET`, `S3_REGION`, optional `S3_ENDPOINT` + `S3_FORCE_PATH_STYLE` (R2, MinIO, Railway Buckets), optional `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` (otherwise the AWS default credential chain).
-- `POST /api/files/upload-url` returns a presigned PUT URL (content type is signed). Configure bucket CORS for browser uploads.
+- `POST /api/files/upload-url` takes `{ filename, contentType, size }` and returns a presigned PUT URL. Content type and size are signed: the bucket rejects another type or another size, so a URL cannot be used to store a larger file than the API approved. Configure bucket CORS for browser uploads.
+- Add a lifecycle rule to the bucket that aborts incomplete multipart uploads after a day (S3: `AbortIncompleteMultipartUpload`). Interrupted uploads otherwise stay in the bucket, invisible and billed.
+- Uploads are not recorded in the database, so there is no per-user storage quota. Add a table of uploaded keys and sizes if you need one.
 - Local development: `docker compose --profile minio up -d`, see comments in `docker-compose.yml`.
 <!-- @setup-endif -->
 

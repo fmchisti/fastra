@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ownerPrefix } from "../src/modules/files/service.ts";
 import { ALICE, bearer } from "./fakes/auth.ts";
 import { createMemoryStorage } from "./fakes/storage.ts";
@@ -148,7 +148,7 @@ describe("files routes", () => {
   });
 
   describe("POST /api/files/upload-url", () => {
-    const payload = { filename: "avatar.webp", contentType: "image/webp" };
+    const payload = { filename: "avatar.webp", contentType: "image/webp", size: 2048 };
 
     it("returns 501 when the storage provider cannot presign", async () => {
       const { app } = await setup({ presign: false });
@@ -179,6 +179,22 @@ describe("files routes", () => {
       expect(body.key.startsWith(`${ownerPrefix(ALICE.id)}/`)).toBe(true);
       expect(body.method).toBe("PUT");
       expect(new Date(body.expiresAt).getTime()).toBeGreaterThan(Date.now());
+      // The storage provider is asked for a URL that accepts exactly this size
+      expect(new URL(body.url).searchParams.get("size")).toBe("2048");
+      await app.close();
+    });
+
+    it("requires the size and refuses one above the limit", async () => {
+      const { app } = await setup({ presign: true });
+      const request = (body: object) =>
+        app.inject({ method: "POST", url: "/api/files/upload-url", headers: alice, payload: body });
+
+      const missing = await request({ filename: "a.webp", contentType: "image/webp" });
+      const tooLarge = await request({ ...payload, size: 11 * 1024 * 1024 });
+
+      expect(missing.statusCode).toBe(400);
+      expect(tooLarge.statusCode).toBe(413);
+      expect(tooLarge.json()).toMatchObject({ message: expect.stringContaining("exceeds") });
       await app.close();
     });
 
@@ -189,12 +205,43 @@ describe("files routes", () => {
         method: "POST",
         url: "/api/files/upload-url",
         headers: alice,
-        payload: { filename: "x.html", contentType: "text/html" },
+        payload: { filename: "x.html", contentType: "text/html", size: 10 },
       });
 
       expect(response.statusCode).toBe(415);
       await app.close();
     });
+  });
+});
+
+describe("upload rate limit", () => {
+  it("gives uploads and upload URLs a small budget per client", async () => {
+    vi.stubEnv("UPLOAD_RATE_LIMIT_MAX", "2");
+    const { app } = await setup({ presign: true });
+    const uploadUrl = () =>
+      app.inject({
+        method: "POST",
+        url: "/api/files/upload-url",
+        headers: alice,
+        payload: { filename: "a.webp", contentType: "image/webp", size: 10 },
+      });
+    const statusCodes = async (request: () => Promise<{ statusCode: number }>) => {
+      const codes: number[] = [];
+      for (let i = 0; i < 3; i++) codes.push((await request()).statusCode);
+      return codes;
+    };
+
+    expect(await statusCodes(() => upload(app))).toEqual([201, 201, 429]);
+    expect(await statusCodes(uploadUrl)).toEqual([200, 200, 429]);
+    // Reading files is not part of the upload budget
+    const download = await app.inject({
+      method: "GET",
+      url: `/api/files/${ownerPrefix(ALICE.id)}/x`,
+      headers: alice,
+    });
+    expect(download.statusCode).not.toBe(429);
+    await app.close();
+    vi.unstubAllEnvs();
   });
 });
 

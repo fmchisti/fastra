@@ -89,6 +89,11 @@ const files = {
   env: [
     { key: "UPLOAD_MAX_FILE_SIZE_MB", example: "10" },
     {
+      key: "UPLOAD_RATE_LIMIT_MAX",
+      example: "20",
+      comment: "Uploads (and upload URLs) per client per minute",
+    },
+    {
       key: "UPLOAD_ALLOWED_CONTENT_TYPES",
       example: "image/png,image/jpeg,image/webp,image/gif,application/pdf",
       comment: "Avoid image/svg+xml and text/html: they can run scripts",
