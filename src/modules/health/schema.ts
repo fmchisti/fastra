@@ -4,7 +4,6 @@ export const HealthCheckResponseSchema = z.object({
   status: z.literal("healthy"),
   timestamp: z.iso.datetime(),
   uptime: z.number().int().nonnegative(),
-  environment: z.enum(["development", "production", "test"]),
 });
 
 export type HealthCheckResponse = z.infer<typeof HealthCheckResponseSchema>;

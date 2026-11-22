@@ -13,7 +13,8 @@ describe("GET /api/health", () => {
     expect(response.statusCode).toBe(200);
     const body = HealthCheckResponseSchema.parse(response.json());
     expect(body.status).toBe("healthy");
-    expect(body.environment).toBe("test");
+    // The environment name is not public information
+    expect(response.json()).not.toHaveProperty("environment");
   });
 });
 
@@ -66,5 +67,61 @@ describe("GET /", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ name: APP_NAME, version: APP_VERSION });
+  });
+});
+
+describe("readiness under load and failure", () => {
+  const countingApp = async (env: Record<string, string>, check: () => Promise<void>) => {
+    const { default: Fastify } = await import("fastify");
+    const { serializerCompiler, validatorCompiler } = await import("fastify-type-provider-zod");
+    const { default: healthRoutes } = await import("../src/modules/health/routes.ts");
+    const app = Fastify();
+    app.setValidatorCompiler(validatorCompiler);
+    app.setSerializerCompiler(serializerCompiler);
+    await app.register(healthRoutes, {
+      checks: { dependency: check },
+      cacheMs: Number(env.cacheMs),
+      timeoutMs: Number(env.timeoutMs),
+    });
+    return app;
+  };
+
+  it("runs the checks once for requests that arrive within the cache time", async () => {
+    let calls = 0;
+    const app = await countingApp({ cacheMs: "60000", timeoutMs: "1000" }, async () => {
+      calls++;
+    });
+
+    const responses = await Promise.all(
+      Array.from({ length: 20 }, () => app.inject({ method: "GET", url: "/health/ready" })),
+    );
+    await app.inject({ method: "GET", url: "/health/ready" });
+
+    expect(responses.every((response) => response.statusCode === 200)).toBe(true);
+    expect(calls).toBe(1);
+    await app.close();
+  });
+
+  it("checks every time when the cache is off", async () => {
+    let calls = 0;
+    const app = await countingApp({ cacheMs: "0", timeoutMs: "1000" }, async () => {
+      calls++;
+    });
+
+    await app.inject({ method: "GET", url: "/health/ready" });
+    await app.inject({ method: "GET", url: "/health/ready" });
+
+    expect(calls).toBe(2);
+    await app.close();
+  });
+
+  it("reports a dependency that does not answer in time as unavailable", async () => {
+    const app = await countingApp({ cacheMs: "0", timeoutMs: "20" }, () => new Promise(() => undefined));
+
+    const response = await app.inject({ method: "GET", url: "/health/ready" });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({ message: "Unavailable: dependency" });
+    await app.close();
   });
 });

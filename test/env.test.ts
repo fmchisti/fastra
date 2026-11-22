@@ -3,6 +3,7 @@ import { parseEnv as parseDotenv } from "node:util";
 import { describe, expect, it, vi } from "vitest";
 import { EnvError, exitWithEnvError, parseEnv } from "../src/config/env.ts";
 import { loadDatabaseEnv } from "../src/db/env.ts"; // @setup-if orm!=none
+import { toPoolSettings } from "../src/db/pool.ts"; // @setup-if orm!=none
 
 const validEnv = {};
 
@@ -103,9 +104,25 @@ describe("loadDatabaseEnv", () => {
     expect(loadDatabaseEnv({ DATABASE_URL: "postgresql://u:p@localhost:5432/db" })).toEqual({
       DATABASE_URL: "postgresql://u:p@localhost:5432/db",
       DATABASE_POOL_MAX: 10,
+      DATABASE_CONNECT_TIMEOUT_SECONDS: 5,
+      DATABASE_STATEMENT_TIMEOUT_SECONDS: 30,
     });
     expect(() => loadDatabaseEnv({})).toThrow(/DATABASE_URL/);
     expect(() => loadDatabaseEnv({ DATABASE_URL: "nope" })).toThrow(/DATABASE_URL/);
+  });
+
+  it("bounds the pool: size, wait for a connection, and statement time", () => {
+    const url = { DATABASE_URL: "postgresql://u:p@localhost:5432/db" };
+
+    expect(toPoolSettings(loadDatabaseEnv(url))).toEqual({
+      max: 10,
+      connectionTimeoutMillis: 5000,
+      statementTimeoutSeconds: 30,
+    });
+    expect(
+      toPoolSettings(loadDatabaseEnv({ ...url, DATABASE_STATEMENT_TIMEOUT_SECONDS: "0" }))
+        .statementTimeoutSeconds,
+    ).toBe(0);
   });
 });
 // @setup-endif

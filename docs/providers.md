@@ -111,6 +111,14 @@ Contract: `src/db/types.ts` (`Database` with `client`, `ping`, `close`) plus one
 - Env: `DATABASE_URL`, optional `DATABASE_POOL_MAX` (validated in `src/db/env.ts` when the database is created).
 
 Repositories are tested by contract suites against every implementation on an in-process Postgres (PGlite), including the shared `crud-contract.ts` that `pnpm gen:module` uses.
+
+### Connection limits
+
+The pool is created in `src/db/pool.ts`:
+
+- `DATABASE_POOL_MAX` (10): connections per instance. Instances × this must stay below the database's limit.
+- `DATABASE_CONNECT_TIMEOUT_SECONDS` (5): a request that cannot get a connection in time fails with 500 instead of waiting forever.
+- `DATABASE_STATEMENT_TIMEOUT_SECONDS` (30): Postgres cancels a statement, or an idle open transaction, after this time. It is applied with `SET` on each new connection, which also works through connection poolers. Set 0 for no limit.
 <!-- @setup-endif -->
 
 ## Storage

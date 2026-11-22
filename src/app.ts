@@ -41,6 +41,7 @@ export const buildApp = async (
   const app = Fastify({
     logger: loggerOptions,
     trustProxy: env.TRUST_PROXY,
+    requestTimeout: env.REQUEST_TIMEOUT_SECONDS * 1000,
     genReqId: generateRequestId,
     logController: new LogController({ requestIdLogLabel: "requestId" }),
   }).withTypeProvider<ZodTypeProvider>();
@@ -49,7 +50,6 @@ export const buildApp = async (
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
   app.setErrorHandler(errorHandler);
-  app.setNotFoundHandler(notFoundHandler);
   // @setup-if auth!=none
   app.decorate("auth", deps.auth);
   app.decorateRequest("user", null);
@@ -97,6 +97,9 @@ export const buildApp = async (
     // @setup-endif
   });
 
+  // Unknown URLs count against the same limit: otherwise scanning for routes is free
+  app.setNotFoundHandler({ preHandler: app.rateLimit() }, notFoundHandler);
+
   await app.register(fastifySwagger, createSwaggerOptions(env));
   if (env.DOCS_ENABLED) {
     await app.register(fastifySwaggerUi, createSwaggerUiOptions(env));
@@ -109,6 +112,7 @@ export const buildApp = async (
   // @setup-endif
   await app.register(healthRoutes, {
     prefix: "/api",
+    cacheMs: env.HEALTH_CACHE_SECONDS * 1000,
     checks: {
       // @setup-if orm!=none
       database: () => deps.database.ping(),

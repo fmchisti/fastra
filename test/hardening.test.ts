@@ -100,6 +100,18 @@ describe("rate limiting", () => {
     await app.close();
   });
 
+  it("limits unknown URLs too, so scanning for routes is not free", async () => {
+    const app = await buildTestApp({}, testEnv({ RATE_LIMIT_MAX: "2" }));
+
+    const codes: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      codes.push((await app.inject({ method: "GET", url: `/api/unknown-${i}` })).statusCode);
+    }
+
+    expect(codes).toEqual([404, 404, 429, 429]);
+    await app.close();
+  });
+
   it("never limits health checks", async () => {
     const app = await buildTestApp({}, testEnv({ RATE_LIMIT_MAX: "1" }), withLimitedRoute);
 
@@ -146,6 +158,18 @@ describe("rate limiting", () => {
     // A spoofed header must not reset the limit
     expect((await from("203.0.113.99")).statusCode).toBe(429);
     await app.close();
+  });
+});
+
+describe("slow clients", () => {
+  it("gives a client a bounded time to send its request", async () => {
+    const app = await buildTestApp({}, testEnv({ REQUEST_TIMEOUT_SECONDS: "7" }));
+    const defaults = await buildTestApp();
+
+    // Node closes a connection whose request is not complete after this many milliseconds
+    expect(app.server.requestTimeout).toBe(7000);
+    expect(defaults.server.requestTimeout).toBe(60_000);
+    await Promise.all([app.close(), defaults.close()]);
   });
 });
 

@@ -89,6 +89,12 @@ const coreEnvSchema = z
 
     // Seconds to finish in-flight requests on SIGTERM before forcing exit
     SHUTDOWN_TIMEOUT_SECONDS: z.coerce.number<string>().positive().default(10),
+    // Seconds a client has to send a complete request (headers and body). Stops slow clients
+    // from holding connections open. Raise it if large uploads arrive over slow links.
+    REQUEST_TIMEOUT_SECONDS: z.coerce.number<string>().positive().default(60),
+    // Seconds /api/health/ready reuses its last result, so probes (or anyone calling the
+    // public endpoint in a loop) cannot put load on the database. 0 checks on every request.
+    HEALTH_CACHE_SECONDS: z.coerce.number<string>().min(0).default(5),
 
     // API docs: enabled by default except in production.
     // When DOCS_USERNAME and DOCS_PASSWORD are set, /api/docs requires HTTP Basic Auth.

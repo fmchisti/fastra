@@ -1,4 +1,3 @@
-import { env } from "../../config/env.ts";
 import type { HealthCheckResponse } from "./schema.ts";
 
 const startTime = Date.now();
@@ -10,6 +9,5 @@ export const getHealthStatus = (): HealthCheckResponse => {
     status: "healthy",
     timestamp: new Date().toISOString(),
     uptime,
-    environment: env.NODE_ENV,
   };
 };
